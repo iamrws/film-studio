@@ -1,0 +1,421 @@
+import { useState, useCallback } from 'react';
+import { useProjectStore } from '../stores/project-store';
+import { useGenerationStore } from '../stores/generation-store';
+import { decomposeSceneIntoShots } from '../services/llm-service';
+import { renderAllPrompts } from '../services/prompt-renderer';
+import { generationQueue } from '../services/generation-queue';
+import type { Shot, PlatformId } from '../types/scene';
+
+// Maps platform ID to the API key field name in settings
+const PLATFORM_KEY_FIELD: Record<PlatformId, string> = {
+  veo3: 'gemini',
+  sora2: 'openai',
+  kling3: 'kling',
+  seedance2: 'seedance',
+  runwayGen4: 'runway',
+};
+
+export function ShotDesigner() {
+  const scenes = useProjectStore((s) => s.project.scenes);
+  const characters = useProjectStore((s) => s.project.characterBible.characters);
+  const globalStyle = useProjectStore((s) => s.project.globalStyle);
+  const settings = useProjectStore((s) => s.project.settings);
+  const selectedSceneIndex = useProjectStore((s) => s.selectedSceneIndex);
+  const setSelectedScene = useProjectStore((s) => s.setSelectedScene);
+  const setShotsForScene = useProjectStore((s) => s.setShotsForScene);
+  const setActiveScreen = useProjectStore((s) => s.setActiveScreen);
+
+  const generationStats = useGenerationStore((s) => s.stats);
+
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedShot, setExpandedShot] = useState<string | null>(null);
+  const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+
+  const selectedScene = selectedSceneIndex !== null ? scenes[selectedSceneIndex] : null;
+  const platform = settings.defaultPlatform;
+  const keyField = PLATFORM_KEY_FIELD[platform] || platform;
+
+  const handleGenerateShots = useCallback(async () => {
+    if (selectedSceneIndex === null || !selectedScene) return;
+
+    const apiKey = settings.apiKeys[settings.llmProvider];
+    if (!apiKey) {
+      setError(`No API key configured for ${settings.llmProvider}. Go to Settings to add one.`);
+      return;
+    }
+
+    setGenerating(true);
+    setError(null);
+
+    try {
+      const rawShots = await decomposeSceneIntoShots(
+        {
+          scene: selectedScene,
+          characters,
+          globalStyle,
+        },
+        {
+          provider: settings.llmProvider,
+          apiKey,
+        }
+      );
+
+      const shots: Shot[] = rawShots.map((raw) => {
+        const shot: Shot = {
+          id: crypto.randomUUID(),
+          sceneId: selectedScene.id,
+          sequenceOrder: raw.sequenceOrder,
+          durationSeconds: raw.durationSeconds,
+          prompt: raw.prompt,
+          psychology: raw.psychology,
+          renderedPrompts: { generic: '' },
+          generations: [],
+        };
+        shot.renderedPrompts = renderAllPrompts(shot, globalStyle, characters);
+        return shot;
+      });
+
+      setShotsForScene(selectedSceneIndex, shots);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGenerating(false);
+    }
+  }, [selectedSceneIndex, selectedScene, characters, globalStyle, settings, setShotsForScene]);
+
+  const getApiKeyForPlatform = useCallback((): string | null => {
+    const apiKey = settings.apiKeys[keyField];
+    if (!apiKey) {
+      setError(`No API key for ${platform}. Go to Settings and add your "${keyField}" API key.`);
+      return null;
+    }
+    return apiKey;
+  }, [settings, platform, keyField]);
+
+  const handleSubmitShot = useCallback(
+    (shot: Shot) => {
+      const apiKey = getApiKeyForPlatform();
+      if (!apiKey) return;
+
+      setError(null);
+      generationQueue.setApiConfig(platform, { apiKey });
+      generationQueue.enqueue(shot, platform, globalStyle, characters);
+      setSubmitStatus(`Shot submitted to ${platform}. Check the Generation Queue for status.`);
+      setTimeout(() => setSubmitStatus(null), 5000);
+    },
+    [platform, globalStyle, characters, getApiKeyForPlatform]
+  );
+
+  const handleSubmitAll = useCallback(() => {
+    if (!selectedScene || selectedScene.shots.length === 0) return;
+
+    const apiKey = getApiKeyForPlatform();
+    if (!apiKey) return;
+
+    setError(null);
+    generationQueue.setApiConfig(platform, { apiKey });
+    generationQueue.enqueueBatch(selectedScene.shots, platform, globalStyle, characters);
+    setSubmitStatus(
+      `${selectedScene.shots.length} shots submitted to ${platform}. Opening Generation Queue...`
+    );
+    setTimeout(() => {
+      setSubmitStatus(null);
+      setActiveScreen('queue');
+    }, 1500);
+  }, [selectedScene, platform, globalStyle, characters, getApiKeyForPlatform, setActiveScreen]);
+
+  return (
+    <div className="shot-designer">
+      <div className="shot-scene-panel">
+        <h3 style={{ fontSize: 14, marginBottom: 12, color: 'var(--text-secondary)' }}>Scenes</h3>
+        {scenes.length === 0 ? (
+          <div className="empty-state" style={{ padding: 16 }}>
+            <p>Parse a screenplay first</p>
+          </div>
+        ) : (
+          scenes.map((scene, i) => (
+            <div
+              key={scene.id}
+              className={`scene-tree-item ${selectedSceneIndex === i ? 'selected' : ''}`}
+              onClick={() => setSelectedScene(i)}
+            >
+              <div className="scene-number">Scene {i + 1}</div>
+              <div className="scene-heading" style={{ fontSize: 11 }}>
+                {scene.heading.prefix}. {scene.heading.location}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                {scene.shots.length} shot{scene.shots.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+          ))
+        )}
+
+        {/* Queue status indicator */}
+        {generationStats.total > 0 && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 12,
+              background: 'var(--bg-tertiary)',
+              borderRadius: 6,
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+            onClick={() => setActiveScreen('queue')}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Generation Queue</div>
+            <div>{generationStats.active} active | {generationStats.completed} done | {generationStats.failed} failed</div>
+          </div>
+        )}
+      </div>
+
+      <div className="shot-editor-panel">
+        {!selectedScene ? (
+          <div className="empty-state">
+            <h3>Select a Scene</h3>
+            <p>Choose a scene from the left panel to design shots.</p>
+            <p style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+              The Shot Designer will use the Psychology Engine to generate<br />
+              camera, lighting, and audio prompts based on the emotional<br />
+              function of each beat in the scene.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ marginBottom: 8 }}>
+                  Scene {selectedSceneIndex! + 1}: {selectedScene.heading.prefix}.{' '}
+                  {selectedScene.heading.location}
+                  {selectedScene.heading.time ? ` - ${selectedScene.heading.time}` : ''}
+                </h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {selectedScene.charactersPresent.map((char) => (
+                    <span key={char} className="badge badge-info">{char}</span>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={handleGenerateShots}
+                  disabled={generating}
+                  style={{
+                    padding: '8px 16px',
+                    background: generating ? '#555' : 'var(--accent)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 6,
+                    cursor: generating ? 'not-allowed' : 'pointer',
+                    fontSize: 13,
+                  }}
+                >
+                  {generating ? 'Generating...' : 'Generate Shots with AI'}
+                </button>
+                {selectedScene.shots.length > 0 && (
+                  <button
+                    onClick={handleSubmitAll}
+                    style={{
+                      padding: '8px 16px',
+                      background: '#4ade80',
+                      color: '#000',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Submit All to {platform}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Status messages */}
+            {error && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background: '#f8717120',
+                  border: '1px solid #f87171',
+                  borderRadius: 6,
+                  color: '#f87171',
+                  fontSize: 12,
+                  marginBottom: 16,
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            {submitStatus && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background: '#4ade8020',
+                  border: '1px solid #4ade80',
+                  borderRadius: 6,
+                  color: '#4ade80',
+                  fontSize: 12,
+                  marginBottom: 16,
+                }}
+              >
+                {submitStatus}
+              </div>
+            )}
+
+            {selectedScene.shots.length === 0 && !generating ? (
+              <div className="empty-state" style={{ padding: 32 }}>
+                <p>No shots designed yet for this scene.</p>
+                <p style={{ marginTop: 8, fontSize: 12 }}>
+                  Click "Generate Shots with AI" to decompose this scene<br />
+                  into individual camera shots with psychology-informed prompts.
+                </p>
+              </div>
+            ) : (
+              <div>
+                {selectedScene.shots.map((shot, i) => (
+                  <div
+                    key={shot.id}
+                    style={{
+                      background: 'var(--bg-secondary)',
+                      border: `1px solid ${expandedShot === shot.id ? 'var(--accent)' : 'var(--border)'}`,
+                      borderRadius: 8,
+                      padding: 16,
+                      marginBottom: 12,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setExpandedShot(expandedShot === shot.id ? null : shot.id)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>
+                          Shot {i + 1} — {shot.durationSeconds}s
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                          {shot.prompt.camera.shotType} | {shot.prompt.camera.movement} | {shot.prompt.camera.angle}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: getEmotionColor(shot.psychology.valence),
+                            color: '#000',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {shot.psychology.targetEmotion}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          A:{shot.psychology.arousalLevel}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSubmitShot(shot);
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            background: 'var(--accent)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontSize: 11,
+                          }}
+                        >
+                          Submit
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                      {shot.prompt.subject.action}
+                    </div>
+
+                    {expandedShot === shot.id && (
+                      <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 12 }}>
+                          <div>
+                            <div style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: 4 }}>Camera</div>
+                            <div>Type: {shot.prompt.camera.shotType}</div>
+                            <div>Movement: {shot.prompt.camera.movement}</div>
+                            <div>Angle: {shot.prompt.camera.angle}</div>
+                            <div>Lens: {shot.prompt.camera.lens}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: 4 }}>Lighting</div>
+                            <div>Style: {shot.prompt.lighting.style}</div>
+                            <div>Temp: {shot.prompt.lighting.colorTemperature}</div>
+                            {shot.prompt.lighting.sources && <div>Sources: {shot.prompt.lighting.sources}</div>}
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: 4 }}>Psychology</div>
+                            <div>Emotion: {shot.psychology.targetEmotion}</div>
+                            <div>Mode: {shot.psychology.identificationMode}</div>
+                            <div>Arc: {shot.psychology.storyArcPosition}</div>
+                            <div>Schema: {shot.psychology.schemaRelationship}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: 4 }}>Audio</div>
+                            {shot.prompt.audio.dialogue.map((d, di) => (
+                              <div key={di}>{d.characterName}: &quot;{d.text}&quot;</div>
+                            ))}
+                            {shot.prompt.audio.sfx.length > 0 && <div>SFX: {shot.prompt.audio.sfx.join(', ')}</div>}
+                            {shot.prompt.audio.ambient && <div>Ambient: {shot.prompt.audio.ambient}</div>}
+                          </div>
+                        </div>
+
+                        {shot.renderedPrompts.veo3 && (
+                          <div style={{ marginTop: 12 }}>
+                            <div style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12, marginBottom: 4 }}>
+                              Rendered Veo 3 Prompt
+                            </div>
+                            <pre
+                              style={{
+                                fontSize: 11,
+                                color: 'var(--text-secondary)',
+                                whiteSpace: 'pre-wrap',
+                                background: 'var(--bg-primary)',
+                                padding: 10,
+                                borderRadius: 6,
+                                maxHeight: 150,
+                                overflowY: 'auto',
+                              }}
+                            >
+                              {shot.renderedPrompts.veo3}
+                            </pre>
+                          </div>
+                        )}
+
+                        {shot.psychology.transportationCues.length > 0 && (
+                          <div style={{ marginTop: 8 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              Transportation cues: {shot.psychology.transportationCues.join(' | ')}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function getEmotionColor(valence: number): string {
+  if (valence >= 3) return '#4ade80';
+  if (valence >= 1) return '#86efac';
+  if (valence >= -1) return '#fbbf24';
+  if (valence >= -3) return '#fb923c';
+  return '#f87171';
+}

@@ -1,0 +1,29 @@
+[package]
+name = "app"
+version = "0.1.0"
+description = "Film Studio — AI-powered film production"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6" }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+tauri = { version = "2.10.3" }
+tauri-plugin-log = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+dirs-next = "2.0"
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+opener = "0.7"
