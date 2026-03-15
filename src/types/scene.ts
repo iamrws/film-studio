@@ -79,8 +79,16 @@ export interface RenderedPrompts {
   kling3?: string;
   seedance2?: string;
   runwayGen4?: string;
+  hailuo?: string;
+  wan?: string;
+  ltx?: string;
+  grok?: string;
   generic: string;
 }
+
+export type PromptPlatformId =
+  | 'veo3' | 'sora2' | 'kling3' | 'seedance2'
+  | 'runwayGen4' | 'hailuo' | 'wan' | 'ltx' | 'grok';
 
 export interface Generation {
   id: string;

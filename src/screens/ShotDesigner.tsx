@@ -2,18 +2,30 @@ import { useState, useCallback } from 'react';
 import { useProjectStore } from '../stores/project-store';
 import { useGenerationStore } from '../stores/generation-store';
 import { decomposeSceneIntoShots } from '../services/llm-service';
-import { renderAllPrompts } from '../services/prompt-renderer';
+import { renderAllPrompts, renderNegativePrompt } from '../services/prompt-renderer';
 import { generationQueue } from '../services/generation-queue';
-import type { Shot, PlatformId } from '../types/scene';
+import type { Shot, PlatformId, PromptPlatformId } from '../types/scene';
 
 // Maps platform ID to the API key field name in settings
-const PLATFORM_KEY_FIELD: Record<PlatformId, string> = {
+const PLATFORM_KEY_FIELD: Partial<Record<PlatformId, string>> = {
   veo3: 'gemini',
   sora2: 'openai',
   kling3: 'kling',
   seedance2: 'seedance',
   runwayGen4: 'runway',
 };
+
+// All Artlist platforms for prompt preview
+const PROMPT_PLATFORMS: { id: PromptPlatformId; name: string; hasApi: boolean; hasNegativePrompt: boolean }[] = [
+  { id: 'veo3', name: 'Veo 3.1', hasApi: true, hasNegativePrompt: false },
+  { id: 'sora2', name: 'Sora 2', hasApi: true, hasNegativePrompt: false },
+  { id: 'kling3', name: 'Kling 3', hasApi: true, hasNegativePrompt: true },
+  { id: 'hailuo', name: 'Hailuo', hasApi: false, hasNegativePrompt: true },
+  { id: 'seedance2', name: 'Seedance', hasApi: true, hasNegativePrompt: false },
+  { id: 'wan', name: 'Wan', hasApi: false, hasNegativePrompt: true },
+  { id: 'ltx', name: 'LTX', hasApi: false, hasNegativePrompt: false },
+  { id: 'grok', name: 'Grok', hasApi: false, hasNegativePrompt: false },
+];
 
 export function ShotDesigner() {
   const scenes = useProjectStore((s) => s.project.scenes);
@@ -31,6 +43,8 @@ export function ShotDesigner() {
   const [error, setError] = useState<string | null>(null);
   const [expandedShot, setExpandedShot] = useState<string | null>(null);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+  const [previewPlatform, setPreviewPlatform] = useState<PromptPlatformId>('veo3');
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   const selectedScene = selectedSceneIndex !== null ? scenes[selectedSceneIndex] : null;
   const platform = settings.defaultPlatform;
@@ -124,6 +138,12 @@ export function ShotDesigner() {
       setActiveScreen('queue');
     }, 1500);
   }, [selectedScene, platform, globalStyle, characters, getApiKeyForPlatform, setActiveScreen]);
+
+  const handleCopyPrompt = useCallback((text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopyFeedback('Copied!');
+    setTimeout(() => setCopyFeedback(null), 1500);
+  }, []);
 
   return (
     <div className="shot-designer">
@@ -370,27 +390,102 @@ export function ShotDesigner() {
                           </div>
                         </div>
 
-                        {shot.renderedPrompts.veo3 && (
-                          <div style={{ marginTop: 12 }}>
-                            <div style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12, marginBottom: 4 }}>
-                              Rendered Veo 3 Prompt
+                        {/* Multi-Platform Prompt Preview */}
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12 }}>
+                              Prompt Preview
                             </div>
-                            <pre
+                            {copyFeedback && (
+                              <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 600 }}>{copyFeedback}</span>
+                            )}
+                          </div>
+
+                          {/* Platform tabs */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                            {PROMPT_PLATFORMS.map((pp) => (
+                              <button
+                                key={pp.id}
+                                onClick={(e) => { e.stopPropagation(); setPreviewPlatform(pp.id); }}
+                                style={{
+                                  padding: '3px 10px',
+                                  fontSize: 11,
+                                  border: previewPlatform === pp.id ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                  background: previewPlatform === pp.id ? 'var(--accent)' : 'var(--bg-tertiary)',
+                                  color: previewPlatform === pp.id ? '#fff' : 'var(--text-secondary)',
+                                  borderRadius: 4,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {pp.name}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Prompt display */}
+                          <pre
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--text-secondary)',
+                              whiteSpace: 'pre-wrap',
+                              background: 'var(--bg-primary)',
+                              padding: 10,
+                              borderRadius: 6,
+                              maxHeight: 200,
+                              overflowY: 'auto',
+                            }}
+                          >
+                            {shot.renderedPrompts[previewPlatform] || shot.renderedPrompts.generic}
+                          </pre>
+
+                          {/* Action buttons */}
+                          <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyPrompt(shot.renderedPrompts[previewPlatform] || shot.renderedPrompts.generic);
+                              }}
                               style={{
+                                padding: '4px 12px',
                                 fontSize: 11,
-                                color: 'var(--text-secondary)',
-                                whiteSpace: 'pre-wrap',
-                                background: 'var(--bg-primary)',
-                                padding: 10,
-                                borderRadius: 6,
-                                maxHeight: 150,
-                                overflowY: 'auto',
+                                background: 'var(--bg-tertiary)',
+                                color: 'var(--text-primary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 4,
+                                cursor: 'pointer',
                               }}
                             >
-                              {shot.renderedPrompts.veo3}
-                            </pre>
+                              Copy Prompt
+                            </button>
+
+                            {/* Negative prompt copy for platforms that support it */}
+                            {PROMPT_PLATFORMS.find((pp) => pp.id === previewPlatform)?.hasNegativePrompt && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyPrompt(renderNegativePrompt(shot, globalStyle));
+                                }}
+                                style={{
+                                  padding: '4px 12px',
+                                  fontSize: 11,
+                                  background: 'var(--bg-tertiary)',
+                                  color: 'var(--text-primary)',
+                                  border: '1px solid var(--border)',
+                                  borderRadius: 4,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Copy Negative Prompt
+                              </button>
+                            )}
+
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                              {PROMPT_PLATFORMS.find((pp) => pp.id === previewPlatform)?.hasApi
+                                ? 'Can submit via app'
+                                : 'Copy for Artlist.io'}
+                            </span>
                           </div>
-                        )}
+                        </div>
 
                         {shot.psychology.transportationCues.length > 0 && (
                           <div style={{ marginTop: 8 }}>
