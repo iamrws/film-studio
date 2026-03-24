@@ -35,6 +35,8 @@ export function ShotDesigner() {
   const selectedSceneIndex = useProjectStore((s) => s.selectedSceneIndex);
   const setSelectedScene = useProjectStore((s) => s.setSelectedScene);
   const setShotsForScene = useProjectStore((s) => s.setShotsForScene);
+  const updateShotBoardStatus = useProjectStore((s) => s.updateShotBoardStatus);
+  const batchMoveShots = useProjectStore((s) => s.batchMoveShots);
   const setActiveScreen = useProjectStore((s) => s.setActiveScreen);
 
   const generationStats = useGenerationStore((s) => s.stats);
@@ -85,6 +87,9 @@ export function ShotDesigner() {
           psychology: raw.psychology,
           renderedPrompts: { generic: '' },
           generations: [],
+          boardStatus: 'backlog',
+          boardOrder: raw.sequenceOrder,
+          targetPlatform: settings.defaultPlatform,
         };
         shot.renderedPrompts = renderAllPrompts(shot, globalStyle, characters);
         return shot;
@@ -115,10 +120,11 @@ export function ShotDesigner() {
       setError(null);
       generationQueue.setApiConfig(platform, { apiKey });
       generationQueue.enqueue(shot, platform, globalStyle, characters);
+      updateShotBoardStatus(shot.id, 'generating');
       setSubmitStatus(`Shot submitted to ${platform}. Check the Generation Queue for status.`);
       setTimeout(() => setSubmitStatus(null), 5000);
     },
-    [platform, globalStyle, characters, getApiKeyForPlatform]
+    [platform, globalStyle, characters, getApiKeyForPlatform, updateShotBoardStatus]
   );
 
   const handleSubmitAll = useCallback(() => {
@@ -130,6 +136,7 @@ export function ShotDesigner() {
     setError(null);
     generationQueue.setApiConfig(platform, { apiKey });
     generationQueue.enqueueBatch(selectedScene.shots, platform, globalStyle, characters);
+    batchMoveShots(selectedScene.shots.map((shot) => shot.id), 'generating');
     setSubmitStatus(
       `${selectedScene.shots.length} shots submitted to ${platform}. Opening Generation Queue...`
     );
@@ -137,7 +144,7 @@ export function ShotDesigner() {
       setSubmitStatus(null);
       setActiveScreen('queue');
     }, 1500);
-  }, [selectedScene, platform, globalStyle, characters, getApiKeyForPlatform, setActiveScreen]);
+  }, [selectedScene, platform, globalStyle, characters, getApiKeyForPlatform, setActiveScreen, batchMoveShots]);
 
   const handleCopyPrompt = useCallback((text: string) => {
     navigator.clipboard.writeText(text);

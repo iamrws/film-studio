@@ -19,7 +19,7 @@ import type {
   CostEstimate,
   AdapterConfig,
 } from './base-adapter';
-import { renderVeo3Prompt, renderNegativePrompt } from '../services/prompt-renderer';
+import { renderVeo3Prompt } from '../services/prompt-renderer';
 
 // In dev mode, route through Vite proxy to avoid CORS.
 const isDev = import.meta.env.DEV;
@@ -38,7 +38,6 @@ export class Veo3Adapter implements VideoAPIAdapter {
     config: AdapterConfig
   ): Promise<SubmissionResult> {
     const prompt = this.renderPrompt(shot, globalStyle, characters);
-    const negativePrompt = renderNegativePrompt(shot, globalStyle);
 
     const aspectRatioMap: Record<string, string> = {
       '16:9': '16:9',

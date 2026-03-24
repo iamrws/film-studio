@@ -90,6 +90,9 @@ export type PromptPlatformId =
   | 'veo3' | 'sora2' | 'kling3' | 'seedance2'
   | 'runwayGen4' | 'hailuo' | 'wan' | 'ltx' | 'grok';
 
+export const SHOT_BOARD_STATUSES = ['backlog', 'ready', 'generating', 'review', 'done'] as const;
+export type ShotBoardStatus = typeof SHOT_BOARD_STATUSES[number];
+
 export interface Generation {
   id: string;
   shotId: string;
@@ -117,6 +120,9 @@ export interface Shot {
   psychology: ShotPsychology;
   renderedPrompts: RenderedPrompts;
   generations: Generation[];
+  boardStatus: ShotBoardStatus;
+  boardOrder: number;
+  targetPlatform: PlatformId;
 }
 
 export interface Scene {

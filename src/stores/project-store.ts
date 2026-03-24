@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import type { FilmProject, GlobalStyle, ProjectSettings } from '../types/project';
-import type { Shot } from '../types/scene';
 import type { Character } from '../types/character';
+import type { Generation, PlatformId, Shot, ShotBoardStatus } from '../types/scene';
 import { createEmptyProject } from '../types/project';
 import { parseScreenplay, extractScenes } from '../services/screenplay-parser';
+import { renderAllPrompts } from '../services/prompt-renderer';
 import {
   saveProject,
   loadProject,
@@ -15,6 +16,8 @@ import {
   loadApiKeys,
   saveApiKeys,
 } from '../services/persistence';
+
+const BOARD_STATUSES: ShotBoardStatus[] = ['backlog', 'ready', 'generating', 'review', 'done'];
 
 interface ProjectState {
   project: FilmProject;
@@ -35,6 +38,13 @@ interface ProjectState {
   updateGlobalStyle: (style: Partial<GlobalStyle>) => void;
   setShotsForScene: (sceneIndex: number, shots: Shot[]) => void;
   updateCharacters: (characters: Character[]) => void;
+  updateShotBoardStatus: (shotId: string, status: ShotBoardStatus) => void;
+  reorderShots: (status: ShotBoardStatus, orderedShotIds: string[]) => void;
+  batchMoveShots: (shotIds: string[], status: ShotBoardStatus) => void;
+  updateShotTargetPlatform: (shotId: string, platform: PlatformId) => void;
+  updateShotAction: (shotId: string, action: string) => void;
+  upsertShotGeneration: (shotId: string, generation: Generation) => void;
+  updateShotGenerationRating: (shotId: string, generationId: string, rating: number | null) => void;
   loadProject: (project: FilmProject) => void;
   resetProject: () => void;
 
@@ -49,6 +59,140 @@ interface ProjectState {
   // API key actions (stored separately from project)
   loadPersistedApiKeys: () => void;
   persistApiKeys: (keys: Record<string, string>) => void;
+}
+
+function touchProject(project: FilmProject): FilmProject {
+  return {
+    ...project,
+    metadata: {
+      ...project.metadata,
+      modified: new Date().toISOString(),
+    },
+  };
+}
+
+function sortShotsForBoard(a: Shot, b: Shot): number {
+  return a.boardOrder - b.boardOrder || a.sequenceOrder - b.sequenceOrder;
+}
+
+function inferBoardStatus(shot: Shot): ShotBoardStatus {
+  if (shot.generations.some((g) => g.status === 'completed')) return 'review';
+  if (shot.generations.some((g) => g.status === 'queued' || g.status === 'submitted' || g.status === 'processing')) {
+    return 'generating';
+  }
+  if (shot.generations.some((g) => g.status === 'failed')) return 'ready';
+  return 'backlog';
+}
+
+function normalizeShot(
+  shot: Shot,
+  fallbackPlatform: PlatformId,
+  fallbackOrder: number
+): Shot {
+  const normalizedTargetPlatform =
+    shot.targetPlatform && shot.targetPlatform !== 'wan22'
+      ? shot.targetPlatform
+      : shot.generations.at(-1)?.platform ?? fallbackPlatform;
+
+  return {
+    ...shot,
+    boardStatus: shot.boardStatus ?? inferBoardStatus(shot),
+    boardOrder: Number.isFinite(shot.boardOrder) ? shot.boardOrder : fallbackOrder,
+    targetPlatform: normalizedTargetPlatform,
+  };
+}
+
+function reindexBoardOrders(project: FilmProject): FilmProject {
+  const orderById = new Map<string, number>();
+  const allShots = project.scenes.flatMap((scene) => scene.shots);
+
+  for (const status of BOARD_STATUSES) {
+    const shots = allShots.filter((shot) => shot.boardStatus === status).sort(sortShotsForBoard);
+    shots.forEach((shot, index) => orderById.set(shot.id, index));
+  }
+
+  let changed = false;
+  const scenes = project.scenes.map((scene) => {
+    let sceneChanged = false;
+    const shots = scene.shots.map((shot) => {
+      const nextOrder = orderById.get(shot.id);
+      if (nextOrder === undefined || nextOrder === shot.boardOrder) {
+        return shot;
+      }
+      changed = true;
+      sceneChanged = true;
+      return { ...shot, boardOrder: nextOrder };
+    });
+    return sceneChanged ? { ...scene, shots } : scene;
+  });
+
+  return changed ? { ...project, scenes } : project;
+}
+
+function normalizeProject(project: FilmProject): FilmProject {
+  const fallbackPlatform = project.settings.defaultPlatform ?? 'veo3';
+
+  const scenes = project.scenes.map((scene) => ({
+    ...scene,
+    shots: scene.shots.map((shot, index) => normalizeShot(shot, fallbackPlatform, index)),
+  }));
+
+  return reindexBoardOrders({ ...project, scenes });
+}
+
+function updateShotById(
+  project: FilmProject,
+  shotId: string,
+  updater: (shot: Shot, project: FilmProject) => Shot
+): { project: FilmProject; changed: boolean } {
+  let changed = false;
+
+  const scenes = project.scenes.map((scene) => {
+    let sceneChanged = false;
+    const shots = scene.shots.map((shot) => {
+      if (shot.id !== shotId) return shot;
+      const nextShot = updater(shot, project);
+      if (nextShot === shot) return shot;
+      changed = true;
+      sceneChanged = true;
+      return nextShot;
+    });
+
+    return sceneChanged ? { ...scene, shots } : scene;
+  });
+
+  return {
+    changed,
+    project: changed ? { ...project, scenes } : project,
+  };
+}
+
+function setBoardOrdersForStatus(
+  project: FilmProject,
+  status: ShotBoardStatus,
+  orderedShotIds: string[]
+): { project: FilmProject; changed: boolean } {
+  const explicitOrder = new Map(orderedShotIds.map((id, index) => [id, index]));
+  let fallbackIndex = orderedShotIds.length;
+  let changed = false;
+
+  const scenes = project.scenes.map((scene) => {
+    let sceneChanged = false;
+    const shots = scene.shots.map((shot) => {
+      if (shot.boardStatus !== status) return shot;
+      const nextOrder = explicitOrder.get(shot.id) ?? fallbackIndex++;
+      if (nextOrder === shot.boardOrder) return shot;
+      changed = true;
+      sceneChanged = true;
+      return { ...shot, boardOrder: nextOrder };
+    });
+    return sceneChanged ? { ...scene, shots } : scene;
+  });
+
+  return {
+    changed,
+    project: changed ? { ...project, scenes } : project,
+  };
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -180,16 +324,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setShotsForScene: (sceneIndex, shots) =>
     set((state) => {
       const scenes = [...state.project.scenes];
-      if (scenes[sceneIndex]) {
-        scenes[sceneIndex] = { ...scenes[sceneIndex], shots };
-      }
+      if (!scenes[sceneIndex]) return state;
+
+      const fallbackPlatform = state.project.settings.defaultPlatform;
+      const normalizedShots = shots.map((shot, index) => normalizeShot(shot, fallbackPlatform, index));
+      scenes[sceneIndex] = { ...scenes[sceneIndex], shots: normalizedShots };
+
+      const nextProject = reindexBoardOrders({
+        ...state.project,
+        scenes,
+      });
+
       return {
         isDirty: true,
-        project: {
-          ...state.project,
-          scenes,
-          metadata: { ...state.project.metadata, modified: new Date().toISOString() },
-        },
+        project: touchProject(nextProject),
       };
     }),
 
@@ -203,7 +351,195 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       },
     })),
 
-  loadProject: (project) => set({ project, isDirty: false }),
+  updateShotBoardStatus: (shotId, status) =>
+    set((state) => {
+      const nextOrder = state.project.scenes
+        .flatMap((scene) => scene.shots)
+        .filter((shot) => shot.boardStatus === status && shot.id !== shotId)
+        .length;
+
+      const updated = updateShotById(state.project, shotId, (shot) => {
+        if (shot.boardStatus === status) return shot;
+        return { ...shot, boardStatus: status, boardOrder: nextOrder };
+      });
+
+      if (!updated.changed) return state;
+
+      return {
+        isDirty: true,
+        project: touchProject(reindexBoardOrders(updated.project)),
+      };
+    }),
+
+  reorderShots: (status, orderedShotIds) =>
+    set((state) => {
+      const reordered = setBoardOrdersForStatus(state.project, status, orderedShotIds);
+      if (!reordered.changed) return state;
+
+      return {
+        isDirty: true,
+        project: touchProject(reindexBoardOrders(reordered.project)),
+      };
+    }),
+
+  batchMoveShots: (shotIds, status) =>
+    set((state) => {
+      if (shotIds.length === 0) return state;
+
+      const existingShotIds = new Set(
+        state.project.scenes.flatMap((scene) => scene.shots.map((shot) => shot.id))
+      );
+
+      const dedupedMovedIds: string[] = [];
+      const movedSet = new Set<string>();
+      for (const id of shotIds) {
+        if (!existingShotIds.has(id) || movedSet.has(id)) continue;
+        movedSet.add(id);
+        dedupedMovedIds.push(id);
+      }
+      if (dedupedMovedIds.length === 0) return state;
+
+      let statusChanged = false;
+      const withUpdatedStatuses: FilmProject = {
+        ...state.project,
+        scenes: state.project.scenes.map((scene) => {
+          let sceneChanged = false;
+          const shots = scene.shots.map((shot) => {
+            if (!movedSet.has(shot.id) || shot.boardStatus === status) return shot;
+            statusChanged = true;
+            sceneChanged = true;
+            return { ...shot, boardStatus: status };
+          });
+          return sceneChanged ? { ...scene, shots } : scene;
+        }),
+      };
+
+      if (!statusChanged) return state;
+
+      const nonMovedTargetIds = withUpdatedStatuses.scenes
+        .flatMap((scene) => scene.shots)
+        .filter((shot) => shot.boardStatus === status && !movedSet.has(shot.id))
+        .sort(sortShotsForBoard)
+        .map((shot) => shot.id);
+
+      const finalTargetOrder = [...nonMovedTargetIds, ...dedupedMovedIds];
+      const reorderedTarget = setBoardOrdersForStatus(withUpdatedStatuses, status, finalTargetOrder);
+
+      return {
+        isDirty: true,
+        project: touchProject(reindexBoardOrders(reorderedTarget.project)),
+      };
+    }),
+
+  updateShotTargetPlatform: (shotId, platform) =>
+    set((state) => {
+      const updated = updateShotById(state.project, shotId, (shot) => {
+        if (shot.targetPlatform === platform) return shot;
+        return { ...shot, targetPlatform: platform };
+      });
+      if (!updated.changed) return state;
+
+      return {
+        isDirty: true,
+        project: touchProject(updated.project),
+      };
+    }),
+
+  updateShotAction: (shotId, action) =>
+    set((state) => {
+      const cleanedAction = action.trim();
+
+      const updated = updateShotById(state.project, shotId, (shot, project) => {
+        if (shot.prompt.subject.action === cleanedAction) return shot;
+
+        const updatedShot: Shot = {
+          ...shot,
+          prompt: {
+            ...shot.prompt,
+            subject: {
+              ...shot.prompt.subject,
+              action: cleanedAction,
+            },
+          },
+        };
+
+        return {
+          ...updatedShot,
+          renderedPrompts: renderAllPrompts(
+            updatedShot,
+            project.globalStyle,
+            project.characterBible.characters
+          ),
+        };
+      });
+
+      if (!updated.changed) return state;
+
+      return {
+        isDirty: true,
+        project: touchProject(updated.project),
+      };
+    }),
+
+  upsertShotGeneration: (shotId, generation) =>
+    set((state) => {
+      const updated = updateShotById(state.project, shotId, (shot) => {
+        const existingIndex = shot.generations.findIndex(
+          (g) => g.id === generation.id || g.apiRequestId === generation.apiRequestId
+        );
+
+        if (existingIndex === -1) {
+          return { ...shot, generations: [...shot.generations, generation] };
+        }
+
+        const nextGenerations = [...shot.generations];
+        const prevGeneration = nextGenerations[existingIndex];
+        if (
+          prevGeneration.status === generation.status &&
+          prevGeneration.outputPath === generation.outputPath &&
+          prevGeneration.completedAt === generation.completedAt &&
+          prevGeneration.rating === generation.rating &&
+          prevGeneration.notes === generation.notes
+        ) {
+          return shot;
+        }
+
+        nextGenerations[existingIndex] = generation;
+        return { ...shot, generations: nextGenerations };
+      });
+
+      if (!updated.changed) return state;
+
+      return {
+        isDirty: true,
+        project: touchProject(updated.project),
+      };
+    }),
+
+  updateShotGenerationRating: (shotId, generationId, rating) =>
+    set((state) => {
+      const updated = updateShotById(state.project, shotId, (shot) => {
+        const idx = shot.generations.findIndex((g) => g.id === generationId);
+        if (idx === -1) return shot;
+        if (shot.generations[idx].rating === rating) return shot;
+
+        const nextGenerations = [...shot.generations];
+        nextGenerations[idx] = {
+          ...nextGenerations[idx],
+          rating,
+        };
+        return { ...shot, generations: nextGenerations };
+      });
+
+      if (!updated.changed) return state;
+
+      return {
+        isDirty: true,
+        project: touchProject(updated.project),
+      };
+    }),
+
+  loadProject: (project) => set({ project: normalizeProject(project), isDirty: false }),
 
   resetProject: () => set({
     project: createEmptyProject(),
@@ -212,7 +548,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     lastSaved: null,
   }),
 
-  // ─── Persistence ──────────────────────────────────────
+  // Persistence
 
   save: async () => {
     const { project, filePath } = get();
@@ -253,7 +589,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   openProject: async () => {
     const project = await openProjectDialog();
     if (project) {
-      set({ project, isDirty: false, lastSaved: new Date().toISOString() });
+      set({ project: normalizeProject(project), isDirty: false, lastSaved: new Date().toISOString() });
     }
   },
 
@@ -264,7 +600,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         set({ filePath: path });
         setCurrentFilePath(path);
       }
-      set({ project, isDirty: false, lastSaved: new Date().toISOString() });
+      set({ project: normalizeProject(project), isDirty: false, lastSaved: new Date().toISOString() });
     }
   },
 
@@ -276,8 +612,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     stopAutoSave();
   },
 
-
-  // ─── API Keys (separate from project) ─────────────────
+  // API Keys (separate from project)
 
   loadPersistedApiKeys: () => {
     const keys = loadApiKeys();

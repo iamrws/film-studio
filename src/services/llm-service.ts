@@ -204,7 +204,7 @@ interface ShotDecompositionInput {
 export async function decomposeSceneIntoShots(
   input: ShotDecompositionInput,
   config: LLMConfig
-): Promise<Omit<Shot, 'id' | 'sceneId' | 'renderedPrompts' | 'generations'>[]> {
+): Promise<Omit<Shot, 'id' | 'sceneId' | 'renderedPrompts' | 'generations' | 'boardStatus' | 'boardOrder' | 'targetPlatform'>[]> {
   const { scene, characters, globalStyle, genre, storyArcContext } = input;
 
   const charContext = characters
@@ -456,7 +456,7 @@ async function callGemini(
 
 function parseShotsResponse(
   text: string
-): Omit<Shot, 'id' | 'sceneId' | 'renderedPrompts' | 'generations'>[] {
+): Omit<Shot, 'id' | 'sceneId' | 'renderedPrompts' | 'generations' | 'boardStatus' | 'boardOrder' | 'targetPlatform'>[] {
   const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const parsed = JSON.parse(cleaned);
 

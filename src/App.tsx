@@ -9,18 +9,20 @@ import { ReviewGallery } from './screens/ReviewGallery';
 import { Settings } from './screens/Settings';
 import { EmotionalArc } from './screens/EmotionalArc';
 import { Storyboard } from './screens/Storyboard';
+import { PromptBoard } from './screens/PromptBoard';
 import './App.css';
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: '◻' },
-  { id: 'editor', label: 'Screenplay', icon: '✎' },
-  { id: 'characters', label: 'Characters', icon: '☺' },
-  { id: 'shots', label: 'Shot Designer', icon: '◎' },
-  { id: 'arc', label: 'Emotional Arc', icon: '∿' },
-  { id: 'storyboard', label: 'Storyboard', icon: '▦' },
-  { id: 'queue', label: 'Queue', icon: '▶' },
-  { id: 'review', label: 'Review', icon: '★' },
-  { id: 'settings', label: 'Settings', icon: '⚙' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'D' },
+  { id: 'editor', label: 'Screenplay', icon: 'E' },
+  { id: 'characters', label: 'Characters', icon: 'C' },
+  { id: 'shots', label: 'Shot Designer', icon: 'S' },
+  { id: 'arc', label: 'Emotional Arc', icon: 'A' },
+  { id: 'storyboard', label: 'Storyboard', icon: 'T' },
+  { id: 'board', label: 'Prompt Board', icon: 'B' },
+  { id: 'queue', label: 'Queue', icon: 'Q' },
+  { id: 'review', label: 'Review', icon: 'R' },
+  { id: 'settings', label: 'Settings', icon: 'G' },
 ] as const;
 
 function App() {
@@ -85,6 +87,7 @@ function App() {
         {activeScreen === 'shots' && <ShotDesigner />}
         {activeScreen === 'arc' && <EmotionalArc />}
         {activeScreen === 'storyboard' && <Storyboard />}
+        {activeScreen === 'board' && <PromptBoard />}
         {activeScreen === 'queue' && <GenerationQueue />}
         {activeScreen === 'review' && <ReviewGallery />}
         {activeScreen === 'settings' && <Settings />}

@@ -84,6 +84,10 @@ export const ShotSchema = z.object({
     kling3: z.string().optional(),
     seedance2: z.string().optional(),
     runwayGen4: z.string().optional(),
+    hailuo: z.string().optional(),
+    wan: z.string().optional(),
+    ltx: z.string().optional(),
+    grok: z.string().optional(),
     generic: z.string(),
   }),
   generations: z.array(z.object({
@@ -101,6 +105,9 @@ export const ShotSchema = z.object({
     rating: z.number().nullable(),
     notes: z.string(),
   })),
+  boardStatus: z.enum(['backlog', 'ready', 'generating', 'review', 'done']).default('backlog'),
+  boardOrder: z.number().int().min(0).default(0),
+  targetPlatform: z.enum(['veo3', 'sora2', 'kling3', 'seedance2', 'runwayGen4', 'wan22']).default('veo3'),
 });
 
 export type ValidatedShot = z.infer<typeof ShotSchema>;
