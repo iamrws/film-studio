@@ -10,6 +10,7 @@ import { Settings } from './screens/Settings';
 import { EmotionalArc } from './screens/EmotionalArc';
 import { Storyboard } from './screens/Storyboard';
 import { PromptBoard } from './screens/PromptBoard';
+import { BRollStudio } from './screens/BRollStudio';
 import './App.css';
 
 const NAV_ITEMS = [
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { id: 'shots', label: 'Shot Designer', icon: 'S' },
   { id: 'arc', label: 'Emotional Arc', icon: 'A' },
   { id: 'storyboard', label: 'Storyboard', icon: 'T' },
+  { id: 'broll', label: 'B-Roll', icon: 'F' },
   { id: 'board', label: 'Prompt Board', icon: 'B' },
   { id: 'queue', label: 'Queue', icon: 'Q' },
   { id: 'review', label: 'Review', icon: 'R' },
@@ -87,6 +89,7 @@ function App() {
         {activeScreen === 'shots' && <ShotDesigner />}
         {activeScreen === 'arc' && <EmotionalArc />}
         {activeScreen === 'storyboard' && <Storyboard />}
+        {activeScreen === 'broll' && <BRollStudio />}
         {activeScreen === 'board' && <PromptBoard />}
         {activeScreen === 'queue' && <GenerationQueue />}
         {activeScreen === 'review' && <ReviewGallery />}

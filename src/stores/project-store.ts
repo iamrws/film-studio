@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { FilmProject, GlobalStyle, ProjectSettings } from '../types/project';
+import type { FilmProject, GlobalStyle, ProjectSettings, BRollClip } from '../types/project';
 import type { Character } from '../types/character';
 import type { Generation, PlatformId, Shot, ShotBoardStatus } from '../types/scene';
 import { createEmptyProject } from '../types/project';
@@ -45,6 +45,9 @@ interface ProjectState {
   updateShotAction: (shotId: string, action: string) => void;
   upsertShotGeneration: (shotId: string, generation: Generation) => void;
   updateShotGenerationRating: (shotId: string, generationId: string, rating: number | null) => void;
+  addBRollClip: (clip: BRollClip) => void;
+  updateBRollClip: (clipId: string, updates: Partial<BRollClip>) => void;
+  removeBRollClip: (clipId: string) => void;
   loadProject: (project: FilmProject) => void;
   resetProject: () => void;
 
@@ -539,7 +542,36 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       };
     }),
 
-  loadProject: (project) => set({ project: normalizeProject(project), isDirty: false }),
+  addBRollClip: (clip) =>
+    set((state) => ({
+      isDirty: true,
+      project: touchProject({
+        ...state.project,
+        bRollClips: [...(state.project.bRollClips || []), clip],
+      }),
+    })),
+
+  updateBRollClip: (clipId, updates) =>
+    set((state) => {
+      const clips = (state.project.bRollClips || []).map((c) =>
+        c.id === clipId ? { ...c, ...updates } : c
+      );
+      return {
+        isDirty: true,
+        project: touchProject({ ...state.project, bRollClips: clips }),
+      };
+    }),
+
+  removeBRollClip: (clipId) =>
+    set((state) => ({
+      isDirty: true,
+      project: touchProject({
+        ...state.project,
+        bRollClips: (state.project.bRollClips || []).filter((c) => c.id !== clipId),
+      }),
+    })),
+
+  loadProject: (project) => set({ project: normalizeProject({ ...project, bRollClips: project.bRollClips || [] }), isDirty: false }),
 
   resetProject: () => set({
     project: createEmptyProject(),

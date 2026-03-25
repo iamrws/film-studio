@@ -365,6 +365,80 @@ Classify the overall story shape and provide per-scene valence/arousal analysis.
   return parseEmotionalArcResponse(responseText);
 }
 
+// ─── B-Roll Prompt Generation ─────────────────────────────
+
+const BROLL_PROMPT_SYSTEM = `You are a world-class cinematographer specializing in stunning B-roll footage. Your job is to transform a user's natural-language scene description into a highly detailed, cinematic video generation prompt.
+
+ABSOLUTE RULE — ZERO DIALOGUE:
+- B-roll is purely visual. NEVER include spoken words, dialogue, voice-over, narration, lip movement, or any character speaking.
+- NEVER include text overlays, subtitles, captions, signs with readable text, or on-screen graphics.
+- The output must describe ONLY visuals, ambient sound, natural sound effects, and music.
+
+PROMPT STRUCTURE — write a single, richly detailed paragraph that covers:
+1. CAMERA: Shot type (aerial, tracking, dolly, crane, macro, wide establishing, slow-motion, timelapse, etc.), lens (wide-angle, telephoto, tilt-shift, anamorphic), movement (smooth glide, orbit, push-in, pull-back, static lockdown)
+2. SUBJECT & ACTION: What is happening visually — no people talking, just environment, objects, nature, architecture, activity observed from a distance
+3. SETTING: Location, time of day, season, weather, atmosphere
+4. LIGHTING: Golden hour, blue hour, overcast soft light, neon reflections, dappled shade, etc.
+5. STYLE: Color grade (warm, cool, teal-orange, desaturated, vivid), film look (cinematic 24fps, vintage 16mm, modern digital, drone footage), mood
+6. AUDIO (ambient only): Wind, waves, traffic hum, birdsong, crowd murmur, rain, silence — NEVER speech
+
+QUALITY STANDARDS:
+- Every prompt should feel like a National Geographic or Apple commercial shot
+- Include at least one striking sensory detail (light behavior, texture, movement quality)
+- Prompts should be 80-150 words — detailed enough for AI video generators but focused
+- Add a negative prompt line at the end: "Negative: dialogue, speech, talking, text, subtitles, captions, voice-over, narration, words, letters, watermark, blurry, low quality"
+
+OUTPUT FORMAT:
+Return a JSON object:
+{
+  "prompt": "the detailed cinematic prompt text",
+  "negativePrompt": "dialogue, speech, talking, text, subtitles, captions, voice-over, narration, words, letters, watermark, blurry, low quality",
+  "suggestedDuration": number (5-15 seconds),
+  "mood": "one-word mood descriptor"
+}
+
+Return ONLY the JSON object.`;
+
+export interface BRollGenerationInput {
+  description: string;
+  category?: string;
+  style?: string;
+}
+
+export interface BRollGenerationOutput {
+  prompt: string;
+  negativePrompt: string;
+  suggestedDuration: number;
+  mood: string;
+}
+
+export async function generateBRollPrompt(
+  input: BRollGenerationInput,
+  config: LLMConfig
+): Promise<BRollGenerationOutput> {
+  const userPrompt = `Generate a stunning B-roll video prompt for this scene:
+
+DESCRIPTION: ${input.description}
+${input.category ? `CATEGORY: ${input.category}` : ''}
+${input.style ? `PREFERRED STYLE: ${input.style}` : ''}
+
+Remember: ABSOLUTELY ZERO DIALOGUE. This is pure visual B-roll footage. No people speaking, no text on screen, no narration.`;
+
+  const responseText = await callLLM(BROLL_PROMPT_SYSTEM, userPrompt, config, { jsonMode: true });
+  return parseBRollResponse(responseText);
+}
+
+function parseBRollResponse(text: string): BRollGenerationOutput {
+  const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const parsed = JSON.parse(cleaned);
+  return {
+    prompt: parsed.prompt || '',
+    negativePrompt: parsed.negativePrompt || 'dialogue, speech, talking, text, subtitles, watermark, blurry, low quality',
+    suggestedDuration: Math.max(5, Math.min(15, parsed.suggestedDuration || 8)),
+    mood: parsed.mood || 'cinematic',
+  };
+}
+
 // ─── Core LLM Call ───────────────────────────────────────
 
 async function callLLM(

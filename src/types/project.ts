@@ -26,6 +26,16 @@ export interface EmotionalArc {
   sceneValences: { sceneId: string; valence: number; arousal: number }[];
 }
 
+export interface BRollClip {
+  id: string;
+  description: string;
+  category: string;
+  generatedPrompt: string;
+  platform: PlatformId;
+  status: 'draft' | 'ready' | 'generating' | 'completed' | 'failed';
+  createdAt: string;
+}
+
 export interface ProjectSettings {
   defaultPlatform: PlatformId;
   llmProvider: 'claude' | 'gemini';
@@ -45,6 +55,7 @@ export interface FilmProject {
   globalStyle: GlobalStyle;
   emotionalArc: EmotionalArc;
   scenes: Scene[];
+  bRollClips: BRollClip[];
   settings: ProjectSettings;
 }
 
@@ -78,6 +89,7 @@ export function createEmptyProject(title = 'Untitled'): FilmProject {
       sceneValences: [],
     },
     scenes: [],
+    bRollClips: [],
     settings: {
       defaultPlatform: 'veo3',
       llmProvider: 'claude',
