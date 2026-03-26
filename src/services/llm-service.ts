@@ -131,8 +131,9 @@ const SHOT_DECOMPOSITION_SYSTEM = `You are a professional film director and cine
 CRITICAL RULES:
 1. Each shot = one continuous video clip (3-8 seconds)
 2. Within a scene, ONLY action and dialogue change between shots — camera/setting/lighting/style are copied VERBATIM unless the screenplay explicitly directs a change (the "snubroot rule")
-3. Character consistency_anchor must appear IDENTICALLY in every prompt containing that character
+3. CHARACTER CONSISTENCY IS PARAMOUNT: In the "characters" array of each shot, use the EXACT character name string provided in the CHARACTERS IN SCENE section. Do NOT invent new names, abbreviate, or change capitalization. The rendering system uses these names to inject frozen physical descriptions (consistency anchors) into every prompt.
 4. Front-load camera direction in the prompt (Veo 3 weights early tokens)
+5. The "subject.description" field should include a vivid, detailed description of what the characters look like in THIS specific shot — clothing, posture, expression, physical details. This reinforces visual consistency across shots.
 
 PSYCHOLOGY-INFORMED SHOT DESIGN:
 - Emotional beats → CLOSE-UP or MEDIUM CLOSE-UP (empathy via embodied simulation)

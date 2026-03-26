@@ -27,7 +27,16 @@ function resolveCharacters(
   characters: Character[]
 ): { name: string; anchor: string }[] {
   return charIds
-    .map((id) => characters.find((c) => c.id === id || c.name === id))
+    .map((id) => {
+      const lower = id.toLowerCase().trim();
+      return characters.find(
+        (c) =>
+          c.id === id ||
+          c.name.toLowerCase() === lower ||
+          c.name.toLowerCase().includes(lower) ||
+          lower.includes(c.name.toLowerCase())
+      );
+    })
     .filter(Boolean)
     .map((c) => ({
       name: c!.name,
@@ -83,10 +92,12 @@ export function renderVeo3Prompt(
   parts.push(`${cameraStr}${lensStr}`);
 
   // Subject with character consistency anchors + action
+  // Front-load character anchors with names for maximum consistency
   const chars = resolveCharacters(p.subject.characters, characters);
   if (chars.length > 0) {
-    parts.push(chars.map((c) => c.anchor).join('. '));
+    parts.push(chars.map((c) => `${c.name}: ${c.anchor}`).join('. '));
   }
+  if (p.subject.description) parts.push(p.subject.description);
   parts.push(p.subject.action);
 
   // Setting + atmosphere

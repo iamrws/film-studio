@@ -62,13 +62,17 @@ export class GenerationQueue {
   private activeSubmissions = 0;
   private maxConcurrent: number;
   private pollIntervalMs: number;
+  private submissionDelayMs: number;
   private pollTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
   private eventHandlers: QueueEventHandler[] = [];
   private apiConfigs: Partial<Record<PlatformId, AdapterConfig>> = {};
+  private retryDelays: Map<string, number> = new Map();
+  private maxRetries = 3;
 
-  constructor(maxConcurrent = 3, pollIntervalMs = 10000) {
+  constructor(maxConcurrent = 2, pollIntervalMs = 10000, submissionDelayMs = 3000) {
     this.maxConcurrent = maxConcurrent;
     this.pollIntervalMs = pollIntervalMs;
+    this.submissionDelayMs = submissionDelayMs;
   }
 
   setApiConfig(platform: PlatformId, config: AdapterConfig): void {
@@ -190,16 +194,40 @@ export class GenerationQueue {
 
   // ─── Internal ────────────────────────────────────────
 
-  private async processQueue(): Promise<void> {
-    const queued = this.getJobs().filter((j) => j.status === 'queued');
+  private isProcessing = false;
 
-    for (const job of queued) {
-      if (this.activeSubmissions >= this.maxConcurrent) break;
-      await this.submitJob(job);
+  private async processQueue(): Promise<void> {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+
+    try {
+      const queued = this.getJobs().filter((j) => j.status === 'queued');
+
+      for (const job of queued) {
+        if (this.activeSubmissions >= this.maxConcurrent) break;
+
+        // Stagger submissions to avoid rate-limit bursts
+        if (this.activeSubmissions > 0 || this.getJobs().some((j) => j.status === 'submitting')) {
+          await this.delay(this.submissionDelayMs);
+        }
+
+        await this.submitJob(job);
+      }
+    } finally {
+      this.isProcessing = false;
     }
   }
 
-  private async submitJob(job: QueuedJob): Promise<void> {
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private isRateLimitError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    return msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
+  }
+
+  private async submitJob(job: QueuedJob, retryCount = 0): Promise<void> {
     const config = this.apiConfigs[job.platform];
     if (!config) {
       this.updateJob(job.id, {
@@ -223,12 +251,26 @@ export class GenerationQueue {
       );
 
       if (result.status === 'failed') {
+        // Check if the failure is a rate-limit error
+        if (this.isRateLimitError(result.error || '') && retryCount < this.maxRetries) {
+          this.activeSubmissions--;
+          const backoff = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s
+          console.log(`[Queue] Rate limited on job ${job.id}, retrying in ${backoff / 1000}s (attempt ${retryCount + 1}/${this.maxRetries})`);
+          this.updateJob(job.id, { status: 'queued', error: `Rate limited — retrying in ${backoff / 1000}s...` });
+          this.emit(this.jobs.get(job.id)!, 'progress');
+          await this.delay(backoff);
+          return this.submitJob(job, retryCount + 1);
+        }
+
         this.activeSubmissions--;
         this.updateJob(job.id, { status: 'failed', error: result.error });
         this.emit(this.jobs.get(job.id)!, 'failed');
         this.processQueue();
         return;
       }
+
+      // Clear any retry state on success
+      this.retryDelays.delete(job.id);
 
       const generation: Generation = {
         id: crypto.randomUUID(),
@@ -255,6 +297,17 @@ export class GenerationQueue {
       // Start polling
       this.startPolling(job.id, result.apiRequestId, config);
     } catch (err) {
+      // Retry on rate-limit errors caught as exceptions
+      if (this.isRateLimitError(err) && retryCount < this.maxRetries) {
+        this.activeSubmissions--;
+        const backoff = Math.pow(2, retryCount) * 5000;
+        console.log(`[Queue] Rate limited on job ${job.id}, retrying in ${backoff / 1000}s (attempt ${retryCount + 1}/${this.maxRetries})`);
+        this.updateJob(job.id, { status: 'queued', error: `Rate limited — retrying in ${backoff / 1000}s...` });
+        this.emit(this.jobs.get(job.id)!, 'progress');
+        await this.delay(backoff);
+        return this.submitJob(job, retryCount + 1);
+      }
+
       this.activeSubmissions--;
       this.updateJob(job.id, {
         status: 'failed',

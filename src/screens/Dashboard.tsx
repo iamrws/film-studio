@@ -1,6 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useProjectStore } from '../stores/project-store';
-import { generateScreenplay } from '../services/llm-service';
+import {
+  generateScreenplay,
+  extractCharactersFromScreenplay,
+  decomposeSceneIntoShots,
+} from '../services/llm-service';
+import { renderAllPrompts } from '../services/prompt-renderer';
+import { generationQueue } from '../services/generation-queue';
+import type { Shot } from '../types/scene';
+import type { Character } from '../types/character';
 
 const GENRE_OPTIONS = [
   'Drama', 'Thriller', 'Horror', 'Comedy', 'Sci-Fi',
@@ -33,6 +41,10 @@ export function Dashboard() {
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [degenRunning, setDegenRunning] = useState(false);
+  const [degenStep, setDegenStep] = useState('');
+  const [degenProgress, setDegenProgress] = useState<string[]>([]);
+  const degenAbort = useRef(false);
 
   const hasScreenplay = project.screenplay.rawText.length > 0;
   const parsed = project.screenplay.parsed;
@@ -73,6 +85,170 @@ export function Dashboard() {
       setGenerating(false);
     }
   }, [concept, genre, tone, targetLength, additionalNotes, settings, updateScreenplayText, parseCurrentScreenplay, updateProjectTitle, setActiveScreen]);
+
+  const addLog = useCallback((msg: string) => {
+    setDegenProgress((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  }, []);
+
+  const handleDegenMode = useCallback(async () => {
+    if (!concept.trim()) return;
+
+    const apiKey = settings.apiKeys[settings.llmProvider];
+    if (!apiKey) {
+      setError(`No API key set for ${settings.llmProvider}. Go to Settings to add one.`);
+      return;
+    }
+
+    degenAbort.current = false;
+    setDegenRunning(true);
+    setDegenProgress([]);
+    setError(null);
+
+    const llmConfig = { provider: settings.llmProvider, apiKey } as const;
+
+    try {
+      // Step 1: Generate Screenplay
+      setDegenStep('Writing screenplay...');
+      addLog('Generating screenplay from concept...');
+      const screenplay = await generateScreenplay(
+        {
+          concept: concept.trim(),
+          genre: genre || undefined,
+          tone: tone || undefined,
+          targetLength,
+          additionalNotes: additionalNotes.trim() || undefined,
+        },
+        { ...llmConfig, maxTokens: 16384 }
+      );
+      if (degenAbort.current) throw new Error('Aborted');
+
+      updateScreenplayText(screenplay);
+      parseCurrentScreenplay();
+      const title = concept.trim().slice(0, 60);
+      updateProjectTitle(title);
+      addLog(`Screenplay generated and parsed.`);
+
+      // Re-read store after parse
+      let currentProject = useProjectStore.getState().project;
+      const sceneCount = currentProject.scenes.length;
+      addLog(`Found ${sceneCount} scenes.`);
+
+      if (sceneCount === 0) {
+        addLog('No scenes detected — stopping.');
+        setDegenStep('Done (no scenes found)');
+        setDegenRunning(false);
+        return;
+      }
+
+      // Step 2: Extract Characters
+      setDegenStep('Extracting characters...');
+      addLog('Extracting character profiles from screenplay...');
+      const detectedNames = currentProject.screenplay.parsed?.characters || [];
+      const extractedChars = await extractCharactersFromScreenplay(
+        currentProject.screenplay.rawText,
+        detectedNames,
+        llmConfig
+      );
+      if (degenAbort.current) throw new Error('Aborted');
+
+      const fullCharacters: Character[] = extractedChars.map((c) => ({
+        id: crypto.randomUUID(),
+        referenceImages: [],
+        ...c,
+      }));
+      useProjectStore.getState().updateCharacters(fullCharacters);
+      addLog(`Extracted ${fullCharacters.length} characters with consistency anchors.`);
+
+      // Step 3: Decompose all scenes into shots
+      setDegenStep('Decomposing scenes into shots...');
+      currentProject = useProjectStore.getState().project;
+
+      for (let i = 0; i < currentProject.scenes.length; i++) {
+        if (degenAbort.current) throw new Error('Aborted');
+        const scene = currentProject.scenes[i];
+        setDegenStep(`Decomposing scene ${i + 1}/${sceneCount}: ${scene.heading.location || 'Unknown'}...`);
+        addLog(`Decomposing scene ${i + 1}: ${scene.heading.prefix}. ${scene.heading.location}`);
+
+        try {
+          const rawShots = await decomposeSceneIntoShots(
+            {
+              scene,
+              characters: fullCharacters,
+              globalStyle: currentProject.globalStyle,
+              genre: genre || undefined,
+            },
+            llmConfig
+          );
+
+          const shots: Shot[] = rawShots.map((raw) => {
+            const shot: Shot = {
+              id: crypto.randomUUID(),
+              sceneId: scene.id,
+              sequenceOrder: raw.sequenceOrder,
+              durationSeconds: raw.durationSeconds,
+              prompt: raw.prompt,
+              psychology: raw.psychology,
+              renderedPrompts: { generic: '' },
+              generations: [],
+              boardStatus: 'ready',
+              boardOrder: raw.sequenceOrder,
+              targetPlatform: currentProject.settings.defaultPlatform,
+            };
+            shot.renderedPrompts = renderAllPrompts(shot, currentProject.globalStyle, fullCharacters);
+            return shot;
+          });
+
+          useProjectStore.getState().setShotsForScene(i, shots);
+          addLog(`  -> ${shots.length} shots generated for scene ${i + 1}`);
+        } catch (sceneErr) {
+          addLog(`  -> FAILED on scene ${i + 1}: ${sceneErr instanceof Error ? sceneErr.message : String(sceneErr)}`);
+        }
+      }
+
+      // Step 4: Submit all shots to generation queue
+      currentProject = useProjectStore.getState().project;
+      const allShots = currentProject.scenes.flatMap((s) => s.shots);
+      const totalShots = allShots.length;
+
+      if (totalShots > 0) {
+        setDegenStep(`Submitting ${totalShots} shots to ${currentProject.settings.defaultPlatform}...`);
+        addLog(`Submitting ${totalShots} shots to ${currentProject.settings.defaultPlatform}...`);
+
+        const platform = currentProject.settings.defaultPlatform;
+        const platformKeyField: Record<string, string> = {
+          veo3: 'gemini', sora2: 'openai', kling3: 'kling',
+          seedance2: 'seedance', runwayGen4: 'runway',
+        };
+        const platformKey = settings.apiKeys[platformKeyField[platform] || platform];
+        if (platformKey) {
+          generationQueue.setApiConfig(platform, { apiKey: platformKey });
+          generationQueue.enqueueBatch(allShots, platform, currentProject.globalStyle, fullCharacters);
+          useProjectStore.getState().batchMoveShots(
+            allShots.map((s) => s.id),
+            'generating'
+          );
+          addLog(`All ${totalShots} shots queued for generation.`);
+        } else {
+          addLog(`No API key for ${platform} — shots are ready but not submitted.`);
+        }
+      }
+
+      setDegenStep('DEGEN MODE COMPLETE');
+      addLog('Pipeline complete. Check the Generation Queue for progress.');
+
+    } catch (err) {
+      if ((err as Error).message === 'Aborted') {
+        addLog('Aborted by user.');
+        setDegenStep('Aborted');
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+        addLog(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
+        setDegenStep('Failed');
+      }
+    } finally {
+      setDegenRunning(false);
+    }
+  }, [concept, genre, tone, targetLength, additionalNotes, settings, updateScreenplayText, parseCurrentScreenplay, updateProjectTitle, addLog]);
 
   // If there's already a screenplay, show project overview
   if (hasScreenplay) {
@@ -294,28 +470,111 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Generate Button */}
-      <button
-        onClick={handleGenerate}
-        disabled={generating || !concept.trim()}
-        style={{
-          width: '100%',
-          padding: '14px 24px',
-          fontSize: 16,
-          fontWeight: 700,
-          borderRadius: 8,
-          border: 'none',
-          background: generating || !concept.trim() ? '#555' : 'var(--accent)',
-          color: '#fff',
-          cursor: generating || !concept.trim() ? 'not-allowed' : 'pointer',
-        }}
-      >
-        {generating ? 'Writing your screenplay...' : 'Generate Screenplay'}
-      </button>
+      {/* Generate Buttons */}
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button
+          onClick={handleGenerate}
+          disabled={generating || degenRunning || !concept.trim()}
+          style={{
+            flex: 1,
+            padding: '14px 24px',
+            fontSize: 16,
+            fontWeight: 700,
+            borderRadius: 8,
+            border: 'none',
+            background: generating || degenRunning || !concept.trim() ? '#555' : 'var(--accent)',
+            color: '#fff',
+            cursor: generating || degenRunning || !concept.trim() ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {generating ? 'Writing your screenplay...' : 'Generate Screenplay'}
+        </button>
+        <button
+          onClick={handleDegenMode}
+          disabled={generating || degenRunning || !concept.trim()}
+          style={{
+            flex: 1,
+            padding: '14px 24px',
+            fontSize: 16,
+            fontWeight: 700,
+            borderRadius: 8,
+            border: '2px solid #f59e0b',
+            background: degenRunning ? '#92400e' : generating || !concept.trim() ? '#555' : 'linear-gradient(135deg, #f59e0b, #ef4444)',
+            color: '#fff',
+            cursor: generating || degenRunning || !concept.trim() ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {degenRunning ? 'RUNNING...' : 'DEGEN MODE'}
+        </button>
+      </div>
+
+      {!degenRunning && !generating && concept.trim() && (
+        <div style={{ textAlign: 'center', marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+          Degen Mode: auto-generates screenplay, characters, shots, and submits everything for video generation in one click.
+        </div>
+      )}
 
       {generating && (
         <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
           This may take 30-60 seconds depending on length.
+        </div>
+      )}
+
+      {/* Degen Mode Progress */}
+      {(degenRunning || degenProgress.length > 0) && (
+        <div style={{
+          marginTop: 16,
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 14px',
+            background: degenRunning ? '#92400e' : 'var(--bg-tertiary)',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: degenRunning ? '#fbbf24' : 'var(--text-primary)' }}>
+              {degenStep || 'Degen Mode'}
+            </span>
+            {degenRunning && (
+              <button
+                onClick={() => { degenAbort.current = true; }}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  background: '#f87171',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                Abort
+              </button>
+            )}
+          </div>
+          <div style={{
+            padding: '10px 14px',
+            maxHeight: 200,
+            overflowY: 'auto',
+            fontSize: 11,
+            fontFamily: 'monospace',
+            lineHeight: '1.6',
+            color: 'var(--text-secondary)',
+          }}>
+            {degenProgress.map((line, i) => (
+              <div key={i}>{line}</div>
+            ))}
+            {degenRunning && (
+              <div style={{ color: '#fbbf24', animation: 'pulse 1.5s infinite' }}>
+                Processing...
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
