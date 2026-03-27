@@ -3,7 +3,7 @@ import { useProjectStore } from '../stores/project-store';
 import { useGenerationStore } from '../stores/generation-store';
 import { loadApiKeys } from '../services/persistence';
 import type { PlatformId } from '../types/scene';
-import type { GlobalStyle } from '../types/project';
+import type { GlobalStyle, QueuePlatformSettings, QueueSettings } from '../types/project';
 
 const PLATFORMS: { id: PlatformId; name: string; description: string; keyField: string }[] = [
   { id: 'veo3', name: 'Veo 3 (Google Gemini)', description: 'Native audio, dialogue, frame chaining', keyField: 'gemini' },
@@ -56,6 +56,42 @@ export function Settings() {
       updateGlobalStyle({ [field]: value });
     },
     [updateGlobalStyle]
+  );
+
+  const queueSettings = project.settings.queue;
+
+  const handleQueueRootChange = useCallback(
+    (field: keyof Pick<QueueSettings, 'maxConcurrent' | 'pollIntervalMs' | 'submissionDelayMs'>, raw: string) => {
+      const parsed = Number.parseInt(raw, 10);
+      if (!Number.isFinite(parsed)) return;
+      updateSettings({
+        queue: {
+          ...queueSettings,
+          [field]: parsed,
+        },
+      });
+    },
+    [queueSettings, updateSettings]
+  );
+
+  const handleQueuePlatformChange = useCallback(
+    (platform: PlatformId, field: keyof QueuePlatformSettings, raw: string) => {
+      const parsed = Number.parseInt(raw, 10);
+      if (!Number.isFinite(parsed)) return;
+      updateSettings({
+        queue: {
+          ...queueSettings,
+          platform: {
+            ...queueSettings.platform,
+            [platform]: {
+              ...queueSettings.platform[platform],
+              [field]: parsed,
+            },
+          },
+        },
+      });
+    },
+    [queueSettings, updateSettings]
   );
 
   return (
@@ -186,6 +222,109 @@ export function Settings() {
                 {apiKeys[p.keyField] && (
                   <span style={{ fontSize: 10, color: '#4ade80' }}>Key set</span>
                 )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Global Style */}
+      <section style={{ marginBottom: 32 }}>
+        <h3 style={{ fontSize: 16, marginBottom: 16, color: 'var(--accent)' }}>
+          Queue Reliability Runtime
+        </h3>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+          Controls retry and timeout behavior for generation recovery and restart resume.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div>
+            <label style={labelStyle}>Max Concurrent Jobs</label>
+            <input
+              type="number"
+              min={1}
+              max={6}
+              value={queueSettings.maxConcurrent}
+              onChange={(e) => handleQueueRootChange('maxConcurrent', e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Poll Interval (ms)</label>
+            <input
+              type="number"
+              min={2000}
+              step={500}
+              value={queueSettings.pollIntervalMs}
+              onChange={(e) => handleQueueRootChange('pollIntervalMs', e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Submission Delay (ms)</label>
+            <input
+              type="number"
+              min={0}
+              step={250}
+              value={queueSettings.submissionDelayMs}
+              onChange={(e) => handleQueueRootChange('submissionDelayMs', e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {PLATFORMS.map((platform) => (
+            <div
+              key={platform.id}
+              style={{
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: 10,
+                background: 'var(--bg-secondary)',
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>{platform.name}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={labelStyle}>Timeout (ms)</label>
+                  <input
+                    type="number"
+                    min={5000}
+                    step={1000}
+                    value={queueSettings.platform[platform.id].timeoutMs}
+                    onChange={(e) =>
+                      handleQueuePlatformChange(platform.id, 'timeoutMs', e.target.value)
+                    }
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Max Retries</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={queueSettings.platform[platform.id].maxRetries}
+                    onChange={(e) =>
+                      handleQueuePlatformChange(platform.id, 'maxRetries', e.target.value)
+                    }
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Base Backoff (ms)</label>
+                  <input
+                    type="number"
+                    min={1000}
+                    step={500}
+                    value={queueSettings.platform[platform.id].baseBackoffMs}
+                    onChange={(e) =>
+                      handleQueuePlatformChange(platform.id, 'baseBackoffMs', e.target.value)
+                    }
+                    style={inputStyle}
+                  />
+                </div>
               </div>
             </div>
           ))}

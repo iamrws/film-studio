@@ -21,6 +21,7 @@ import type {
   CostEstimate,
   AdapterConfig,
 } from './base-adapter';
+import { renderRunwayGen4Prompt } from '../services/prompt-renderer';
 
 const RUNWAY_API_BASE = 'https://api.dev.runwayml.com';
 
@@ -28,42 +29,7 @@ export class RunwayGen4Adapter implements VideoAPIAdapter {
   readonly platform = 'runwayGen4' as const;
 
   renderPrompt(shot: Shot, globalStyle: GlobalStyle, characters: Character[]): string {
-    const p = shot.prompt;
-    const parts: string[] = [];
-
-    // Runway: motion-first — lead with action, then context
-    parts.push(p.subject.action);
-
-    // Characters
-    const charAnchors = p.subject.characters
-      .map((charId) => characters.find((c) => c.id === charId || c.name === charId))
-      .filter(Boolean)
-      .map((c) => c!.consistencyAnchor || c!.name);
-
-    if (charAnchors.length > 0) {
-      parts.push(charAnchors.join('. '));
-    }
-
-    // Camera (Runway supports basic camera directions)
-    parts.push(`${p.camera.shotType}, ${p.camera.movement}`);
-
-    // Setting
-    parts.push(`${p.setting.location}, ${p.setting.timeOfDay}`);
-
-    // Lighting and style
-    if (p.lighting.style) {
-      parts.push(`${p.lighting.style} lighting`);
-    }
-
-    if (p.style.colorGrade) {
-      parts.push(p.style.colorGrade);
-    }
-
-    if (globalStyle.filmStyle) {
-      parts.push(globalStyle.filmStyle);
-    }
-
-    return parts.filter(Boolean).join('. ') + '.';
+    return shot.renderedPrompts.runwayGen4 || renderRunwayGen4Prompt(shot, globalStyle, characters);
   }
 
   async submitGeneration(
@@ -184,3 +150,4 @@ export class RunwayGen4Adapter implements VideoAPIAdapter {
     };
   }
 }
+

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { generationQueue } from '../services/generation-queue';
@@ -31,7 +31,9 @@ export function PromptBoard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [groupByScene, setGroupByScene] = useState(false);
   const [selectedShotIds, setSelectedShotIds] = useState<string[]>([]);
-  const [bulkPlatform, setBulkPlatform] = useState<PlatformId>(settings.defaultPlatform);
+  const [bulkPlatform, setBulkPlatform] = useState<PlatformId>(() =>
+    SUPPORTED_PLATFORM_SET.has(settings.defaultPlatform) ? settings.defaultPlatform : 'veo3'
+  );
   const [editingShotId, setEditingShotId] = useState<string | null>(null);
   const [actionDraftByShotId, setActionDraftByShotId] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -119,18 +121,15 @@ export function PromptBoard() {
     return next;
   }, [allShotItems, searchQuery]);
 
-  useEffect(() => {
-    const readySet = new Set(allReadyShotIds);
-    setSelectedShotIds((prev) => prev.filter((id) => readySet.has(id)));
-  }, [allReadyShotIds]);
-
-  useEffect(() => {
-    if (!SUPPORTED_PLATFORM_SET.has(bulkPlatform)) {
-      setBulkPlatform('veo3');
-    }
-  }, [bulkPlatform]);
-
-  const selectedShotSet = useMemo(() => new Set(selectedShotIds), [selectedShotIds]);
+  const readyShotIdSet = useMemo(() => new Set(allReadyShotIds), [allReadyShotIds]);
+  const effectiveSelectedShotIds = useMemo(
+    () => selectedShotIds.filter((id) => readyShotIdSet.has(id)),
+    [selectedShotIds, readyShotIdSet]
+  );
+  const selectedShotSet = useMemo(() => new Set(effectiveSelectedShotIds), [effectiveSelectedShotIds]);
+  const activeBulkPlatform: PlatformId = SUPPORTED_PLATFORM_SET.has(bulkPlatform)
+    ? bulkPlatform
+    : 'veo3';
 
   const flashStatus = (message: string, tone: 'success' | 'error') => {
     setStatusMessage(message);
@@ -142,6 +141,7 @@ export function PromptBoard() {
   };
 
   const handleToggleSelect = (shotId: string) => {
+    if (!readyShotIdSet.has(shotId)) return;
     setSelectedShotIds((prev) =>
       prev.includes(shotId) ? prev.filter((id) => id !== shotId) : [...prev, shotId]
     );
@@ -171,14 +171,14 @@ export function PromptBoard() {
   };
 
   const handleApplyBulkPlatform = () => {
-    const targetIds = selectedShotIds.length > 0 ? selectedShotIds : allReadyShotIds;
+    const targetIds = effectiveSelectedShotIds.length > 0 ? effectiveSelectedShotIds : allReadyShotIds;
     if (targetIds.length === 0) {
       flashStatus('No Ready shots available for bulk platform update.', 'error');
       return;
     }
 
-    targetIds.forEach((id) => updateShotTargetPlatform(id, bulkPlatform));
-    flashStatus(`Applied ${bulkPlatform} to ${targetIds.length} shot(s).`, 'success');
+    targetIds.forEach((id) => updateShotTargetPlatform(id, activeBulkPlatform));
+    flashStatus(`Applied ${activeBulkPlatform} to ${targetIds.length} shot(s).`, 'success');
   };
 
   const submitShots = (shotIds: string[]) => {
@@ -236,7 +236,7 @@ export function PromptBoard() {
   };
 
   const handleGenerateAll = () => {
-    const targetIds = selectedShotIds.length > 0 ? selectedShotIds : allReadyShotIds;
+    const targetIds = effectiveSelectedShotIds.length > 0 ? effectiveSelectedShotIds : allReadyShotIds;
     submitShots(targetIds);
   };
 
@@ -322,8 +322,8 @@ export function PromptBoard() {
         groupByScene={groupByScene}
         onToggleGroupByScene={() => setGroupByScene((prev) => !prev)}
         readyCount={countsByStatus.ready}
-        selectedCount={selectedShotIds.length}
-        bulkPlatform={bulkPlatform}
+        selectedCount={effectiveSelectedShotIds.length}
+        bulkPlatform={activeBulkPlatform}
         onBulkPlatformChange={setBulkPlatform}
         onApplyBulkPlatform={handleApplyBulkPlatform}
         onSelectAllReady={() => setSelectedShotIds(allReadyShotIds)}

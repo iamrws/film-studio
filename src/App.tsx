@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useProjectStore } from './stores/project-store';
+import { useGenerationStore } from './stores/generation-store';
 import { ScreenplayEditor } from './screens/ScreenplayEditor';
 import { Dashboard } from './screens/Dashboard';
 import { CharacterBible } from './screens/CharacterBible';
@@ -37,6 +38,8 @@ function App() {
   const loadFromDisk = useProjectStore((s) => s.loadFromDisk);
   const initAutoSave = useProjectStore((s) => s.initAutoSave);
   const loadPersistedApiKeys = useProjectStore((s) => s.loadPersistedApiKeys);
+  const projectSettings = useProjectStore((s) => s.project.settings);
+  const syncFromProjectSettings = useGenerationStore((s) => s.syncFromProjectSettings);
 
   // Load persisted state on mount
   useEffect(() => {
@@ -44,6 +47,10 @@ function App() {
     loadPersistedApiKeys();
     initAutoSave();
   }, [loadFromDisk, loadPersistedApiKeys, initAutoSave]);
+
+  useEffect(() => {
+    syncFromProjectSettings(projectSettings);
+  }, [projectSettings, syncFromProjectSettings]);
 
   // Ctrl+S / Cmd+S save handler
   useEffect(() => {

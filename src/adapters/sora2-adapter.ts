@@ -20,6 +20,7 @@ import type {
   CostEstimate,
   AdapterConfig,
 } from './base-adapter';
+import { renderSora2Prompt } from '../services/prompt-renderer';
 
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 
@@ -27,45 +28,7 @@ export class Sora2Adapter implements VideoAPIAdapter {
   readonly platform = 'sora2' as const;
 
   renderPrompt(shot: Shot, globalStyle: GlobalStyle, characters: Character[]): string {
-    const p = shot.prompt;
-    const lines: string[] = [];
-
-    // Sora 2 prefers shot-list format with explicit camera nomenclature
-    lines.push(`[CAMERA: ${p.camera.shotType}, ${p.camera.movement}, ${p.camera.angle}, ${p.camera.lens}]`);
-
-    // Characters with consistency anchors
-    const charAnchors = p.subject.characters
-      .map((charId) => characters.find((c) => c.id === charId || c.name === charId))
-      .filter(Boolean)
-      .map((c) => c!.consistencyAnchor || c!.name);
-
-    if (charAnchors.length > 0) {
-      lines.push(`[SUBJECT: ${charAnchors.join('; ')}]`);
-    }
-
-    lines.push(`[ACTION: ${p.subject.action}]`);
-    lines.push(
-      `[SETTING: ${p.setting.location}, ${p.setting.timeOfDay}` +
-      (p.setting.weather ? `, ${p.setting.weather}` : '') +
-      `]`
-    );
-    lines.push(`[LIGHTING: ${p.lighting.style}, ${p.lighting.colorTemperature}]`);
-
-    if (p.style.filmStock || p.style.colorGrade) {
-      lines.push(`[STYLE: ${[p.style.filmStock, p.style.colorGrade, p.style.era].filter(Boolean).join(', ')}]`);
-    }
-
-    if (p.audio.dialogue.length > 0) {
-      for (const d of p.audio.dialogue) {
-        lines.push(`[DIALOGUE: ${d.characterName}: "${d.text}"]`);
-      }
-    }
-
-    if (globalStyle.filmStyle) {
-      lines.push(`[AESTHETIC: ${globalStyle.filmStyle}]`);
-    }
-
-    return lines.join('\n');
+    return shot.renderedPrompts.sora2 || renderSora2Prompt(shot, globalStyle, characters);
   }
 
   async submitGeneration(

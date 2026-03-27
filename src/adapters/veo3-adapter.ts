@@ -66,9 +66,6 @@ export class Veo3Adapter implements VideoAPIAdapter {
 
     const url = `${GEMINI_API_BASE}/models/${VEO_MODEL}:predictLongRunning`;
 
-    console.log('[Film Studio] Veo request URL:', url);
-    console.log('[Film Studio] Veo request body:', JSON.stringify(body, null, 2));
-
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -82,7 +79,6 @@ export class Veo3Adapter implements VideoAPIAdapter {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error('[Film Studio] Veo error:', response.status, errorBody);
         return {
           apiRequestId: '',
           status: 'failed',
@@ -92,8 +88,6 @@ export class Veo3Adapter implements VideoAPIAdapter {
 
       const operation = await response.json();
       const opName = operation.name || '';
-
-      console.log('[Film Studio] Veo job submitted:', opName);
 
       if (!opName) {
         return {
@@ -167,7 +161,6 @@ export class Veo3Adapter implements VideoAPIAdapter {
           return { status: 'completed', progress: 100, outputUrl: videoUri };
         }
 
-        console.warn('[Film Studio] Veo done but no video URI:', JSON.stringify(operation.response).slice(0, 500));
         return { status: 'failed', error: 'Completed but no video URI in response' };
       }
 
@@ -223,6 +216,6 @@ export class Veo3Adapter implements VideoAPIAdapter {
     globalStyle: GlobalStyle,
     characters: Character[]
   ): string {
-    return renderVeo3Prompt(shot, globalStyle, characters);
+    return shot.renderedPrompts.veo3 || renderVeo3Prompt(shot, globalStyle, characters);
   }
 }

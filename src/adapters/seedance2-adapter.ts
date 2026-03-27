@@ -20,6 +20,7 @@ import type {
   CostEstimate,
   AdapterConfig,
 } from './base-adapter';
+import { renderSeedance2Prompt } from '../services/prompt-renderer';
 
 const SEEDANCE_API_BASE = 'https://api.seedance.ai';
 
@@ -27,44 +28,7 @@ export class Seedance2Adapter implements VideoAPIAdapter {
   readonly platform = 'seedance2' as const;
 
   renderPrompt(shot: Shot, globalStyle: GlobalStyle, characters: Character[]): string {
-    const p = shot.prompt;
-    const parts: string[] = [];
-
-    // Seedance: compressed 30-100 words with @Tag references
-    // Front-load the motion/action for Seedance's motion-first model
-    parts.push(p.subject.action);
-
-    // @Tag references for character consistency
-    const charAnchors = p.subject.characters
-      .map((charId) => characters.find((c) => c.id === charId || c.name === charId))
-      .filter(Boolean);
-
-    for (const c of charAnchors) {
-      parts.push(`@${c!.name} ${c!.consistencyAnchor || ''}`);
-    }
-
-    parts.push(`${p.camera.shotType} ${p.camera.movement}`);
-    parts.push(`${p.setting.location} ${p.setting.timeOfDay}`);
-
-    if (p.lighting.style) {
-      parts.push(p.lighting.style);
-    }
-
-    if (p.style.colorGrade) {
-      parts.push(p.style.colorGrade);
-    }
-
-    if (globalStyle.filmStyle) {
-      parts.push(globalStyle.filmStyle);
-    }
-
-    // Seedance: compress to ~80 words max
-    const full = parts.filter(Boolean).join(', ');
-    const words = full.split(/\s+/);
-    if (words.length > 100) {
-      return words.slice(0, 100).join(' ');
-    }
-    return full;
+    return shot.renderedPrompts.seedance2 || renderSeedance2Prompt(shot, globalStyle, characters);
   }
 
   async submitGeneration(

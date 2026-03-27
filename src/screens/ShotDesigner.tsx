@@ -4,6 +4,7 @@ import { useGenerationStore } from '../stores/generation-store';
 import { decomposeSceneIntoShots } from '../services/llm-service';
 import { renderAllPrompts, renderNegativePrompt } from '../services/prompt-renderer';
 import { generationQueue } from '../services/generation-queue';
+import { analyzePromptForPlatform } from '../services/prompt-intelligence';
 import type { Shot, PlatformId, PromptPlatformId } from '../types/scene';
 
 // Maps platform ID to the API key field name in settings
@@ -26,6 +27,10 @@ const PROMPT_PLATFORMS: { id: PromptPlatformId; name: string; hasApi: boolean; h
   { id: 'ltx', name: 'LTX', hasApi: false, hasNegativePrompt: false },
   { id: 'grok', name: 'Grok', hasApi: false, hasNegativePrompt: false },
 ];
+
+function mapPlatformToPromptPlatform(platform: PlatformId): PromptPlatformId {
+  return platform === 'wan22' ? 'wan' : platform;
+}
 
 export function ShotDesigner() {
   const scenes = useProjectStore((s) => s.project.scenes);
@@ -117,11 +122,25 @@ export function ShotDesigner() {
       const apiKey = getApiKeyForPlatform();
       if (!apiKey) return;
 
+      const promptPlatform = mapPlatformToPromptPlatform(platform);
+      const promptText = shot.renderedPrompts[promptPlatform] || shot.renderedPrompts.generic;
+      const quality = analyzePromptForPlatform(shot, promptPlatform, promptText);
+      if (quality.score < 50) {
+        setError(
+          `Shot blocked: prompt quality is ${quality.score}/100 for ${promptPlatform}. ` +
+          `Resolve prompt issues before submitting.`
+        );
+        return;
+      }
+
       setError(null);
       generationQueue.setApiConfig(platform, { apiKey });
       generationQueue.enqueue(shot, platform, globalStyle, characters);
       updateShotBoardStatus(shot.id, 'generating');
-      setSubmitStatus(`Shot submitted to ${platform}. Check the Generation Queue for status.`);
+      setSubmitStatus(
+        `Shot submitted to ${platform}. Prompt quality: ${quality.score}/100. ` +
+        `Check the Generation Queue for status.`
+      );
       setTimeout(() => setSubmitStatus(null), 5000);
     },
     [platform, globalStyle, characters, getApiKeyForPlatform, updateShotBoardStatus]
@@ -132,6 +151,23 @@ export function ShotDesigner() {
 
     const apiKey = getApiKeyForPlatform();
     if (!apiKey) return;
+
+    const promptPlatform = mapPlatformToPromptPlatform(platform);
+    const lowQualityShots = selectedScene.shots
+      .map((shot) => {
+        const promptText = shot.renderedPrompts[promptPlatform] || shot.renderedPrompts.generic;
+        const quality = analyzePromptForPlatform(shot, promptPlatform, promptText);
+        return { shot, quality };
+      })
+      .filter(({ quality }) => quality.score < 50);
+
+    if (lowQualityShots.length > 0) {
+      setError(
+        `Batch blocked: ${lowQualityShots.length} shot(s) are below quality threshold ` +
+        `for ${promptPlatform}. Open the shots and resolve warnings first.`
+      );
+      return;
+    }
 
     setError(null);
     generationQueue.setApiConfig(platform, { apiKey });
@@ -444,6 +480,51 @@ export function ShotDesigner() {
                           >
                             {shot.renderedPrompts[previewPlatform] || shot.renderedPrompts.generic}
                           </pre>
+
+                          {(() => {
+                            const previewText =
+                              shot.renderedPrompts[previewPlatform] || shot.renderedPrompts.generic;
+                            const quality = analyzePromptForPlatform(shot, previewPlatform, previewText);
+                            const qualityColor =
+                              quality.score >= 85
+                                ? '#4ade80'
+                                : quality.score >= 70
+                                  ? '#fbbf24'
+                                  : '#f87171';
+
+                            return (
+                              <div
+                                style={{
+                                  marginTop: 8,
+                                  padding: 10,
+                                  borderRadius: 6,
+                                  border: `1px solid ${qualityColor}`,
+                                  background: 'var(--bg-primary)',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                  }}
+                                >
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: qualityColor }}>
+                                    Prompt Quality: {quality.score}/100
+                                  </span>
+                                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                    {quality.formula}
+                                  </span>
+                                </div>
+                                {quality.issues.length > 0 && (
+                                  <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-muted)' }}>
+                                    {quality.issues.slice(0, 3).map((issue) => issue.message).join(' | ')}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {/* Action buttons */}
                           <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>

@@ -31,15 +31,32 @@ export interface BRollClip {
   description: string;
   category: string;
   generatedPrompt: string;
+  negativePrompt?: string;
+  suggestedDurationSeconds?: number;
   platform: PlatformId;
   status: 'draft' | 'ready' | 'generating' | 'completed' | 'failed';
+  generationJobId?: string;
   createdAt: string;
+}
+
+export interface QueuePlatformSettings {
+  timeoutMs: number;
+  maxRetries: number;
+  baseBackoffMs: number;
+}
+
+export interface QueueSettings {
+  maxConcurrent: number;
+  pollIntervalMs: number;
+  submissionDelayMs: number;
+  platform: Record<PlatformId, QueuePlatformSettings>;
 }
 
 export interface ProjectSettings {
   defaultPlatform: PlatformId;
   llmProvider: 'claude' | 'gemini';
   apiKeys: Record<string, string>;
+  queue: QueueSettings;
 }
 
 export interface FilmProject {
@@ -57,6 +74,22 @@ export interface FilmProject {
   scenes: Scene[];
   bRollClips: BRollClip[];
   settings: ProjectSettings;
+}
+
+export function createDefaultQueueSettings(): QueueSettings {
+  return {
+    maxConcurrent: 2,
+    pollIntervalMs: 10_000,
+    submissionDelayMs: 3_000,
+    platform: {
+      veo3: { timeoutMs: 60_000, maxRetries: 3, baseBackoffMs: 5_000 },
+      sora2: { timeoutMs: 60_000, maxRetries: 3, baseBackoffMs: 5_000 },
+      kling3: { timeoutMs: 60_000, maxRetries: 3, baseBackoffMs: 5_000 },
+      seedance2: { timeoutMs: 60_000, maxRetries: 3, baseBackoffMs: 5_000 },
+      runwayGen4: { timeoutMs: 60_000, maxRetries: 3, baseBackoffMs: 5_000 },
+      wan22: { timeoutMs: 60_000, maxRetries: 3, baseBackoffMs: 5_000 },
+    },
+  };
 }
 
 export function createEmptyProject(title = 'Untitled'): FilmProject {
@@ -94,6 +127,7 @@ export function createEmptyProject(title = 'Untitled'): FilmProject {
       defaultPlatform: 'veo3',
       llmProvider: 'claude',
       apiKeys: {},
+      queue: createDefaultQueueSettings(),
     },
   };
 }

@@ -15,10 +15,12 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function GenerationQueue() {
   const jobs = useGenerationStore((s) => s.jobs);
+  const deadLetters = useGenerationStore((s) => s.deadLetters);
   const stats = useGenerationStore((s) => s.stats);
   const refreshJobs = useGenerationStore((s) => s.refreshJobs);
   const cancelJob = useGenerationStore((s) => s.cancelJob);
   const clearFinished = useGenerationStore((s) => s.clearFinished);
+  const clearDeadLetters = useGenerationStore((s) => s.clearDeadLetters);
 
   useEffect(() => {
     refreshJobs();
@@ -35,6 +37,9 @@ export function GenerationQueue() {
           <button onClick={clearFinished} style={toolbarBtn}>
             Clear Finished
           </button>
+          <button onClick={clearDeadLetters} style={toolbarBtn}>
+            Clear Dead Letter
+          </button>
         </div>
       </div>
 
@@ -44,6 +49,7 @@ export function GenerationQueue() {
         <StatCard label="Active" value={stats.active} color="#60a5fa" />
         <StatCard label="Completed" value={stats.completed} color="#4ade80" />
         <StatCard label="Failed" value={stats.failed} color="#f87171" />
+        <StatCard label="Dead Letter" value={stats.deadLettered} color="#fb7185" />
         <StatCard label="Cost" value={`$${stats.totalCostUsd.toFixed(2)}`} color="#fbbf24" />
       </div>
 
@@ -128,12 +134,45 @@ export function GenerationQueue() {
           </table>
         )}
       </div>
+
+      {deadLetters.length > 0 && (
+        <details style={{ marginTop: 16, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+            Dead Letter Queue ({deadLetters.length})
+          </summary>
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {deadLetters.slice(0, 20).map((entry) => (
+              <div
+                key={entry.id}
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  padding: 8,
+                  fontSize: 12,
+                  background: 'var(--bg-primary)',
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>
+                  {entry.job.platform} | {entry.job.shot.prompt.camera.shotType}
+                </div>
+                <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
+                  Retry count: {entry.retryCount}
+                </div>
+                <div style={{ color: '#f87171', marginTop: 2, wordBreak: 'break-word' }}>
+                  {entry.reason}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }
 
 function VideoActions({ outputPath, shotId }: { outputPath: string; shotId: string }) {
   const apiKey = useProjectStore((s) => s.project.settings.apiKeys['gemini']);
+  const requiresGeminiAuth = outputPath.includes('generativelanguage.googleapis.com');
   const [loading, setLoading] = useState(false);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,14 +182,14 @@ function VideoActions({ outputPath, shotId }: { outputPath: string; shotId: stri
       window.open(blobUrl, '_blank');
       return;
     }
-    if (!apiKey) {
+    if (requiresGeminiAuth && !apiKey) {
       setError('No Gemini API key');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const url = await fetchVideoAsBlob(outputPath, apiKey);
+      const url = await fetchVideoAsBlob(outputPath, requiresGeminiAuth ? apiKey : undefined);
       setBlobUrl(url);
       window.open(url, '_blank');
     } catch (err) {
@@ -161,10 +200,10 @@ function VideoActions({ outputPath, shotId }: { outputPath: string; shotId: stri
   };
 
   const handleDownload = async () => {
-    if (!apiKey) return;
+    if (requiresGeminiAuth && !apiKey) return;
     setLoading(true);
     try {
-      const url = blobUrl || await fetchVideoAsBlob(outputPath, apiKey);
+      const url = blobUrl || await fetchVideoAsBlob(outputPath, requiresGeminiAuth ? apiKey : undefined);
       setBlobUrl(url);
       downloadVideoFile(url, `shot_${shotId}.mp4`);
     } catch (err) {

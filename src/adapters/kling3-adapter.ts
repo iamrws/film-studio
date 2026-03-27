@@ -20,6 +20,7 @@ import type {
   CostEstimate,
   AdapterConfig,
 } from './base-adapter';
+import { renderKling3Prompt } from '../services/prompt-renderer';
 
 const KLING_API_BASE = 'https://api.klingai.com';
 
@@ -27,43 +28,7 @@ export class Kling3Adapter implements VideoAPIAdapter {
   readonly platform = 'kling3' as const;
 
   renderPrompt(shot: Shot, globalStyle: GlobalStyle, characters: Character[]): string {
-    const p = shot.prompt;
-    const parts: string[] = [];
-
-    // Kling uses natural language with camera directions inline
-    parts.push(`${p.camera.shotType} ${p.camera.movement} ${p.camera.angle}`);
-
-    const charAnchors = p.subject.characters
-      .map((charId) => characters.find((c) => c.id === charId || c.name === charId))
-      .filter(Boolean)
-      .map((c) => c!.consistencyAnchor || c!.name);
-
-    if (charAnchors.length > 0) {
-      parts.push(charAnchors.join('. '));
-    }
-
-    parts.push(p.subject.action);
-    parts.push(`${p.setting.location}, ${p.setting.timeOfDay}`);
-
-    if (p.lighting.style) {
-      parts.push(`${p.lighting.style} lighting`);
-    }
-
-    if (p.style.filmStock || p.style.colorGrade) {
-      parts.push([p.style.filmStock, p.style.colorGrade].filter(Boolean).join(', '));
-    }
-
-    if (globalStyle.filmStyle) {
-      parts.push(globalStyle.filmStyle);
-    }
-
-    if (p.audio.dialogue.length > 0) {
-      for (const d of p.audio.dialogue) {
-        parts.push(`${d.characterName} says "${d.text}"`);
-      }
-    }
-
-    return parts.filter(Boolean).join('. ') + '.';
+    return shot.renderedPrompts.kling3 || renderKling3Prompt(shot, globalStyle, characters);
   }
 
   async submitGeneration(

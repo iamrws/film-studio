@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import type { FilmProject, GlobalStyle, ProjectSettings, BRollClip } from '../types/project';
+import type { FilmProject, GlobalStyle, ProjectSettings, BRollClip, QueuePlatformSettings, QueueSettings } from '../types/project';
 import type { Character } from '../types/character';
 import type { Generation, PlatformId, Shot, ShotBoardStatus } from '../types/scene';
-import { createEmptyProject } from '../types/project';
+import { createDefaultQueueSettings, createEmptyProject } from '../types/project';
 import { parseScreenplay, extractScenes } from '../services/screenplay-parser';
 import { renderAllPrompts } from '../services/prompt-renderer';
 import {
@@ -134,13 +134,51 @@ function reindexBoardOrders(project: FilmProject): FilmProject {
 
 function normalizeProject(project: FilmProject): FilmProject {
   const fallbackPlatform = project.settings.defaultPlatform ?? 'veo3';
+  const defaultQueue = createDefaultQueueSettings();
+  const rawQueue = project.settings.queue as Partial<QueueSettings> | undefined;
+  const rawPlatformQueue = rawQueue?.platform as Partial<Record<PlatformId, Partial<QueuePlatformSettings>>> | undefined;
+
+  const normalizeQueuePlatform = (platform: PlatformId): QueuePlatformSettings => {
+    const defaults = defaultQueue.platform[platform];
+    const raw = rawPlatformQueue?.[platform];
+    return {
+      timeoutMs: typeof raw?.timeoutMs === 'number' ? Math.max(5_000, Math.round(raw.timeoutMs)) : defaults.timeoutMs,
+      maxRetries: typeof raw?.maxRetries === 'number' ? Math.max(0, Math.round(raw.maxRetries)) : defaults.maxRetries,
+      baseBackoffMs: typeof raw?.baseBackoffMs === 'number' ? Math.max(1_000, Math.round(raw.baseBackoffMs)) : defaults.baseBackoffMs,
+    };
+  };
+
+  const normalizedSettings: ProjectSettings = {
+    defaultPlatform: project.settings.defaultPlatform ?? 'veo3',
+    llmProvider: project.settings.llmProvider === 'gemini' ? 'gemini' : 'claude',
+    apiKeys: project.settings.apiKeys ?? {},
+    queue: {
+      maxConcurrent: typeof rawQueue?.maxConcurrent === 'number'
+        ? Math.max(1, Math.min(6, Math.round(rawQueue.maxConcurrent)))
+        : defaultQueue.maxConcurrent,
+      pollIntervalMs: typeof rawQueue?.pollIntervalMs === 'number'
+        ? Math.max(2_000, Math.round(rawQueue.pollIntervalMs))
+        : defaultQueue.pollIntervalMs,
+      submissionDelayMs: typeof rawQueue?.submissionDelayMs === 'number'
+        ? Math.max(0, Math.round(rawQueue.submissionDelayMs))
+        : defaultQueue.submissionDelayMs,
+      platform: {
+        veo3: normalizeQueuePlatform('veo3'),
+        sora2: normalizeQueuePlatform('sora2'),
+        kling3: normalizeQueuePlatform('kling3'),
+        seedance2: normalizeQueuePlatform('seedance2'),
+        runwayGen4: normalizeQueuePlatform('runwayGen4'),
+        wan22: normalizeQueuePlatform('wan22'),
+      },
+    },
+  };
 
   const scenes = project.scenes.map((scene) => ({
     ...scene,
     shots: scene.shots.map((shot, index) => normalizeShot(shot, fallbackPlatform, index)),
   }));
 
-  return reindexBoardOrders({ ...project, scenes });
+  return reindexBoardOrders({ ...project, scenes, settings: normalizedSettings });
 }
 
 function updateShotById(

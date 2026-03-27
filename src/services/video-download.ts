@@ -11,7 +11,7 @@ const blobCache = new Map<string, string>();
 
 export async function fetchVideoAsBlob(
   videoUri: string,
-  apiKey: string
+  apiKey?: string
 ): Promise<string> {
   const cached = blobCache.get(videoUri);
   if (cached) return cached;
@@ -22,11 +22,12 @@ export async function fetchVideoAsBlob(
     fetchUrl = videoUri.replace('https://generativelanguage.googleapis.com', PROXY_BASE);
   }
 
-  const response = await fetch(fetchUrl, {
-    headers: {
-      'x-goog-api-key': apiKey,
-    },
-  });
+  const headers: HeadersInit = {};
+  if (apiKey) {
+    headers['x-goog-api-key'] = apiKey;
+  }
+
+  const response = await fetch(fetchUrl, { headers });
 
   if (!response.ok) {
     throw new Error(`Video download failed: ${response.status}`);

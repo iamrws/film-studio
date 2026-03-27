@@ -21,6 +21,13 @@ import {
   GENRE_SCHEMAS,
   EMBODIED_SIMULATION_CUES,
 } from '../config/psychology-rules';
+import {
+  normalizeCameraAngle,
+  normalizeCameraMovement,
+  normalizeCameraShotType,
+  normalizeLightingStyle,
+  normalizeLens,
+} from '../config/cinematography-vocabulary';
 
 export interface LLMConfig {
   provider: 'claude' | 'gemini';
@@ -130,10 +137,13 @@ const SHOT_DECOMPOSITION_SYSTEM = `You are a professional film director and cine
 
 CRITICAL RULES:
 1. Each shot = one continuous video clip (3-8 seconds)
-2. Within a scene, ONLY action and dialogue change between shots — camera/setting/lighting/style are copied VERBATIM unless the screenplay explicitly directs a change (the "snubroot rule")
+2. Within a scene, ONLY action and dialogue change between shots - camera/setting/lighting/style are copied VERBATIM unless the screenplay explicitly directs a change (the "snubroot rule")
 3. CHARACTER CONSISTENCY IS PARAMOUNT: In the "characters" array of each shot, use the EXACT character name string provided in the CHARACTERS IN SCENE section. Do NOT invent new names, abbreviate, or change capitalization. The rendering system uses these names to inject frozen physical descriptions (consistency anchors) into every prompt.
 4. Front-load camera direction in the prompt (Veo 3 weights early tokens)
-5. The "subject.description" field should include a vivid, detailed description of what the characters look like in THIS specific shot — clothing, posture, expression, physical details. This reinforces visual consistency across shots.
+5. The "subject.description" field should include a vivid, detailed description of what the characters look like in THIS specific shot - clothing, posture, expression, physical details. This reinforces visual consistency across shots.
+6. Follow this six-layer structure per shot: [Shot type & framing] + [Subject & action] + [Setting & environment] + [Camera movement] + [Lighting & atmosphere] + [Technical specs: lens, film stock, style]
+7. Use positive, direct phrasing. Do NOT write negative directives such as "no camera movement" or "without motion."
+8. One shot equals one clear visual beat. Do not describe multiple scene changes inside a single shot.
 
 PSYCHOLOGY-INFORMED SHOT DESIGN:
 - Emotional beats → CLOSE-UP or MEDIUM CLOSE-UP (empathy via embodied simulation)
@@ -404,6 +414,7 @@ export interface BRollGenerationInput {
   description: string;
   category?: string;
   style?: string;
+  targetPlatform?: 'veo3' | 'generic';
 }
 
 export interface BRollGenerationOutput {
@@ -417,13 +428,19 @@ export async function generateBRollPrompt(
   input: BRollGenerationInput,
   config: LLMConfig
 ): Promise<BRollGenerationOutput> {
+  const targetGuidance = input.targetPlatform === 'veo3'
+    ? 'Optimize this prompt for Veo 3: front-load camera/lens/movement in the first sentence, then subject/action, then environment and lighting.'
+    : 'Create a platform-neutral prompt that works across modern video models.';
+
   const userPrompt = `Generate a stunning B-roll video prompt for this scene:
 
 DESCRIPTION: ${input.description}
 ${input.category ? `CATEGORY: ${input.category}` : ''}
 ${input.style ? `PREFERRED STYLE: ${input.style}` : ''}
+TARGET MODEL PROFILE: ${input.targetPlatform === 'veo3' ? 'Veo 3' : 'Generic'}
 
-Remember: ABSOLUTELY ZERO DIALOGUE. This is pure visual B-roll footage. No people speaking, no text on screen, no narration.`;
+Remember: ABSOLUTELY ZERO DIALOGUE. This is pure visual B-roll footage. No people speaking, no text on screen, no narration.
+${targetGuidance}`;
 
   const responseText = await callLLM(BROLL_PROMPT_SYSTEM, userPrompt, config, { jsonMode: true });
   return parseBRollResponse(responseText);
@@ -579,10 +596,10 @@ function validatePrompt(raw: Record<string, unknown>): CanonicalPrompt {
 
   return {
     camera: {
-      shotType: cam.shotType || 'MEDIUM SHOT',
-      movement: cam.movement || 'STATIC',
-      lens: cam.lens || '35mm',
-      angle: cam.angle || 'EYE LEVEL',
+      shotType: normalizeCameraShotType(cam.shotType || 'MEDIUM SHOT'),
+      movement: normalizeCameraMovement(cam.movement || 'STATIC'),
+      lens: normalizeLens(cam.lens || '35mm'),
+      angle: normalizeCameraAngle(cam.angle || 'EYE LEVEL'),
     },
     subject: {
       description: (sub.description as string) || '',
@@ -596,7 +613,7 @@ function validatePrompt(raw: Record<string, unknown>): CanonicalPrompt {
       productionDesign: set.productionDesign || '',
     },
     lighting: {
-      style: lit.style || 'natural',
+      style: normalizeLightingStyle(lit.style || 'natural'),
       colorTemperature: lit.colorTemperature || 'daylight 5600K',
       sources: lit.sources || '',
     },

@@ -41,30 +41,29 @@ export function ReviewGallery() {
 }
 
 function ReviewCard({ job }: { job: QueuedJob }) {
-  const apiKey = useProjectStore((s) => s.project.settings.apiKeys['gemini']);
+  const veoApiKey = useProjectStore((s) => s.project.settings.apiKeys['gemini']);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const outputPath = job.generation?.outputPath;
+  const requiresGeminiAuth = Boolean(
+    outputPath && outputPath.includes('generativelanguage.googleapis.com')
+  );
 
   // Auto-fetch video on mount
   useEffect(() => {
-    if (!outputPath || !apiKey) return;
+    if (!outputPath) return;
+    if (requiresGeminiAuth && !veoApiKey) return;
     let cancelled = false;
-    setLoading(true);
-    fetchVideoAsBlob(outputPath, apiKey)
+    fetchVideoAsBlob(outputPath, requiresGeminiAuth ? veoApiKey : undefined)
       .then((url) => {
         if (!cancelled) setBlobUrl(url);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [outputPath, apiKey]);
+  }, [outputPath, requiresGeminiAuth, veoApiKey]);
 
   return (
     <div
@@ -91,7 +90,7 @@ function ReviewCard({ job }: { job: QueuedJob }) {
             controls
             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           />
-        ) : loading ? (
+        ) : outputPath && (!requiresGeminiAuth || Boolean(veoApiKey)) && !error ? (
           <div style={{ color: '#888', fontSize: 12 }}>Loading video...</div>
         ) : error ? (
           <div style={{ color: '#f87171', fontSize: 12, padding: 16, textAlign: 'center' }}>

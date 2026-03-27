@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { useProjectStore } from '../stores/project-store';
 import { generateBRollPrompt } from '../services/llm-service';
 import type { BRollClip } from '../types/project';
+import type { Shot } from '../types/scene';
+import { generationQueue } from '../services/generation-queue';
 
 const BROLL_PRESETS = [
   { label: 'Beach Waves', category: 'beaches', description: 'Gentle ocean waves rolling onto a sandy beach at golden hour, foam dissolving into wet sand' },
@@ -27,11 +29,18 @@ const STYLE_OPTIONS = [
   'Vintage Film', 'Drone Footage', 'Slow Motion', 'Timelapse', 'Minimalist',
 ] as const;
 
+const BROLL_PROMPT_PLATFORM = 'veo3' as const;
+const DEFAULT_BROLL_NEGATIVE = 'dialogue, speech, talking, text, subtitles, captions, voice-over, narration, words, letters, watermark, blurry, low quality';
+
 export function BRollStudio() {
   const settings = useProjectStore((s) => s.project.settings);
+  const globalStyle = useProjectStore((s) => s.project.globalStyle);
+  const characters = useProjectStore((s) => s.project.characterBible.characters);
   const bRollClips = useProjectStore((s) => s.project.bRollClips || []);
   const addBRollClip = useProjectStore((s) => s.addBRollClip);
+  const updateBRollClip = useProjectStore((s) => s.updateBRollClip);
   const removeBRollClip = useProjectStore((s) => s.removeBRollClip);
+  const setActiveScreen = useProjectStore((s) => s.setActiveScreen);
 
   const [description, setDescription] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('');
@@ -57,6 +66,7 @@ export function BRollStudio() {
           description: desc.trim(),
           category,
           style: selectedStyle || undefined,
+          targetPlatform: BROLL_PROMPT_PLATFORM,
         },
         { provider: settings.llmProvider, apiKey }
       );
@@ -65,8 +75,10 @@ export function BRollStudio() {
         id: crypto.randomUUID(),
         description: desc.trim(),
         category: category || 'custom',
-        generatedPrompt: result.prompt + '\n\nNegative: ' + result.negativePrompt,
-        platform: settings.defaultPlatform,
+        generatedPrompt: result.prompt,
+        negativePrompt: result.negativePrompt,
+        suggestedDurationSeconds: result.suggestedDuration,
+        platform: BROLL_PROMPT_PLATFORM,
         status: 'ready',
         createdAt: new Date().toISOString(),
       };
@@ -85,6 +97,48 @@ export function BRollStudio() {
     handleGenerate(preset.description, preset.category);
   }, [handleGenerate]);
 
+  const handleTestInVeo3 = useCallback((clip: BRollClip) => {
+    const geminiApiKey = settings.apiKeys.gemini;
+    if (!geminiApiKey) {
+      setError('Veo3 testing requires a Gemini API key. Add it in Settings under "Veo 3 (Google Gemini)".');
+      return;
+    }
+
+    generationQueue.setApiConfig(BROLL_PROMPT_PLATFORM, { apiKey: geminiApiKey });
+
+    const { prompt, negativePrompt } = splitBRollPromptParts(clip);
+    if (!prompt) {
+      setError('This clip has an empty prompt. Regenerate it first.');
+      return;
+    }
+
+    const duration = clip.suggestedDurationSeconds ?? 8;
+    const shot = buildBRollShot({
+      clip,
+      prompt,
+      negativePrompt,
+      durationSeconds: duration,
+    });
+
+    const jobId = generationQueue.enqueue(
+      shot,
+      BROLL_PROMPT_PLATFORM,
+      globalStyle,
+      characters
+    );
+
+    updateBRollClip(clip.id, {
+      generatedPrompt: prompt,
+      negativePrompt,
+      suggestedDurationSeconds: duration,
+      platform: BROLL_PROMPT_PLATFORM,
+      status: 'generating',
+      generationJobId: jobId,
+    });
+    setExpandedClipId(clip.id);
+    setError(null);
+  }, [settings.apiKeys, globalStyle, characters, updateBRollClip]);
+
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       {/* Left Panel — Input */}
@@ -101,8 +155,19 @@ export function BRollStudio() {
         <div style={{ padding: '20px 20px 0' }}>
           <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>B-Roll Studio</h2>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-            Generate cinematic B-roll footage prompts. Zero dialogue — pure visuals.
+            Step 1: Create a B-roll prompt. Step 2: Test it as a video in Veo3.
           </p>
+          <div style={{
+            padding: '8px 10px',
+            borderRadius: 6,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-primary)',
+            fontSize: 11,
+            color: 'var(--text-secondary)',
+            marginBottom: 16,
+          }}>
+            Prompt profile: <strong>Veo3</strong> (camera direction first, then action, setting, and lighting)
+          </div>
         </div>
 
         {/* Custom Description */}
@@ -180,7 +245,7 @@ export function BRollStudio() {
               cursor: generating || !description.trim() ? 'not-allowed' : 'pointer',
             }}
           >
-            {generating ? 'Crafting B-Roll prompt...' : 'Generate B-Roll Prompt'}
+            {generating ? 'Step 1/2: Creating Prompt...' : 'Step 1: Create B-Roll Prompt'}
           </button>
         </div>
 
@@ -246,7 +311,7 @@ export function BRollStudio() {
             <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }}>F</div>
             <h3 style={{ fontSize: 16, color: 'var(--text-secondary)', marginBottom: 8 }}>No B-Roll clips yet</h3>
             <p style={{ fontSize: 13, maxWidth: 360 }}>
-              Describe a scene or pick a preset to generate cinematic B-roll prompts ready for video generation.
+              Describe a scene or pick a preset to create a prompt, then test that prompt directly in Veo3.
             </p>
           </div>
         ) : (
@@ -257,118 +322,286 @@ export function BRollStudio() {
               </h3>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[...bRollClips].reverse().map((clip) => (
-                <div
-                  key={clip.id}
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    border: `1px solid ${expandedClipId === clip.id ? 'var(--accent)' : 'var(--border)'}`,
-                    borderRadius: 8,
-                    overflow: 'hidden',
-                    transition: 'border-color 0.15s',
-                  }}
-                >
-                  {/* Clip Header */}
+              {[...bRollClips].reverse().map((clip) => {
+                const promptParts = splitBRollPromptParts(clip);
+                const statusBadge = getClipStatusBadge(clip.status);
+
+                return (
                   <div
+                    key={clip.id}
                     style={{
-                      padding: '12px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
+                      background: 'var(--bg-secondary)',
+                      border: `1px solid ${expandedClipId === clip.id ? 'var(--accent)' : 'var(--border)'}`,
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      transition: 'border-color 0.15s',
                     }}
-                    onClick={() => setExpandedClipId(expandedClipId === clip.id ? null : clip.id)}
                   >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{
-                          padding: '2px 8px',
-                          background: 'rgba(99, 102, 241, 0.15)',
-                          color: 'var(--accent)',
-                          borderRadius: 10,
-                          fontSize: 11,
-                          fontWeight: 600,
+                    {/* Clip Header */}
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => setExpandedClipId(expandedClipId === clip.id ? null : clip.id)}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            padding: '2px 8px',
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            color: 'var(--accent)',
+                            borderRadius: 10,
+                            fontSize: 11,
+                            fontWeight: 600,
+                          }}>
+                            {clip.category}
+                          </span>
+                          <span style={{
+                            padding: '2px 8px',
+                            background: statusBadge.background,
+                            color: statusBadge.color,
+                            borderRadius: 10,
+                            fontSize: 11,
+                            fontWeight: 600,
+                          }}>
+                            {clip.status}
+                          </span>
+                        </div>
+                        <div style={{
+                          fontSize: 13,
+                          color: 'var(--text-primary)',
+                          marginTop: 6,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: expandedClipId === clip.id ? 'normal' : 'nowrap',
                         }}>
-                          {clip.category}
-                        </span>
-                        <span style={{
-                          padding: '2px 8px',
-                          background: clip.status === 'ready' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                          color: clip.status === 'ready' ? 'var(--success)' : 'var(--warning)',
-                          borderRadius: 10,
-                          fontSize: 11,
-                          fontWeight: 600,
-                        }}>
-                          {clip.status}
-                        </span>
+                          {clip.description}
+                        </div>
                       </div>
-                      <div style={{
-                        fontSize: 13,
-                        color: 'var(--text-primary)',
-                        marginTop: 6,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: expandedClipId === clip.id ? 'normal' : 'nowrap',
-                      }}>
-                        {clip.description}
-                      </div>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 16, marginLeft: 12 }}>
+                        {expandedClipId === clip.id ? '\u25B2' : '\u25BC'}
+                      </span>
                     </div>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 16, marginLeft: 12 }}>
-                      {expandedClipId === clip.id ? '\u25B2' : '\u25BC'}
-                    </span>
+
+                    {/* Expanded Content */}
+                    {expandedClipId === clip.id && (
+                      <div style={{ borderTop: '1px solid var(--border)', padding: 16 }}>
+                        <label style={{ ...labelStyle, marginBottom: 6 }}>Generated Prompt (Veo3 profile)</label>
+                        <div style={{
+                          background: 'var(--bg-primary)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 6,
+                          padding: 12,
+                          fontSize: 12,
+                          lineHeight: '1.6',
+                          color: 'var(--text-primary)',
+                          whiteSpace: 'pre-wrap',
+                          marginBottom: 12,
+                        }}>
+                          {promptParts.prompt}
+                        </div>
+
+                        <label style={{ ...labelStyle, marginBottom: 6 }}>Negative Prompt</label>
+                        <div style={{
+                          background: 'var(--bg-primary)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 6,
+                          padding: 12,
+                          fontSize: 12,
+                          lineHeight: '1.6',
+                          color: 'var(--text-primary)',
+                          whiteSpace: 'pre-wrap',
+                          marginBottom: 12,
+                        }}>
+                          {promptParts.negativePrompt}
+                        </div>
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          <button
+                            onClick={() => handleTestInVeo3(clip)}
+                            disabled={clip.status === 'generating'}
+                            style={{
+                              ...actionBtn,
+                              borderColor: 'var(--accent)',
+                              background: 'var(--accent)',
+                              color: '#fff',
+                              cursor: clip.status === 'generating' ? 'not-allowed' : 'pointer',
+                              opacity: clip.status === 'generating' ? 0.7 : 1,
+                            }}
+                          >
+                            {getVeo3ActionLabel(clip.status)}
+                          </button>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(promptParts.prompt)}
+                            style={actionBtn}
+                          >
+                            Copy Prompt
+                          </button>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(`${promptParts.prompt}\n\nNegative: ${promptParts.negativePrompt}`)}
+                            style={actionBtn}
+                          >
+                            Copy Prompt + Negative
+                          </button>
+                          <button
+                            onClick={() => setActiveScreen('generation-queue')}
+                            style={actionBtn}
+                          >
+                            Open Queue
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('Remove this B-roll clip?')) {
+                                removeBRollClip(clip.id);
+                                setExpandedClipId(null);
+                              }
+                            }}
+                            style={{ ...actionBtn, borderColor: '#f87171', color: '#f87171' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+                          Created {new Date(clip.createdAt).toLocaleString()} | Target model: Veo3 | Duration: {clip.suggestedDurationSeconds ?? 8}s
+                        </div>
+                        {clip.generationJobId && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                            Queue job: {clip.generationJobId}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-
-                  {/* Expanded Content */}
-                  {expandedClipId === clip.id && (
-                    <div style={{ borderTop: '1px solid var(--border)', padding: 16 }}>
-                      <label style={{ ...labelStyle, marginBottom: 6 }}>Generated Prompt</label>
-                      <div style={{
-                        background: 'var(--bg-primary)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 6,
-                        padding: 12,
-                        fontSize: 12,
-                        lineHeight: '1.6',
-                        color: 'var(--text-primary)',
-                        whiteSpace: 'pre-wrap',
-                        marginBottom: 12,
-                      }}>
-                        {clip.generatedPrompt}
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(clip.generatedPrompt)}
-                          style={actionBtn}
-                        >
-                          Copy Prompt
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm('Remove this B-roll clip?')) {
-                              removeBRollClip(clip.id);
-                              setExpandedClipId(null);
-                            }
-                          }}
-                          style={{ ...actionBtn, borderColor: '#f87171', color: '#f87171' }}
-                        >
-                          Remove
-                        </button>
-                      </div>
-
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-                        Created {new Date(clip.createdAt).toLocaleString()} | Platform: {clip.platform}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
       </div>
     </div>
   );
+}
+
+function splitBRollPromptParts(clip: BRollClip): { prompt: string; negativePrompt: string } {
+  const explicitNegative = clip.negativePrompt?.trim();
+  if (explicitNegative) {
+    return {
+      prompt: clip.generatedPrompt.trim(),
+      negativePrompt: explicitNegative,
+    };
+  }
+
+  const marker = /\n+\s*Negative:\s*/i;
+  const match = marker.exec(clip.generatedPrompt);
+  if (!match) {
+    return {
+      prompt: clip.generatedPrompt.trim(),
+      negativePrompt: DEFAULT_BROLL_NEGATIVE,
+    };
+  }
+
+  const prompt = clip.generatedPrompt.slice(0, match.index).trim();
+  const negativePrompt = clip.generatedPrompt
+    .slice(match.index)
+    .replace(marker, '')
+    .trim();
+
+  return {
+    prompt,
+    negativePrompt: negativePrompt || DEFAULT_BROLL_NEGATIVE,
+  };
+}
+
+function getVeo3ActionLabel(status: BRollClip['status']): string {
+  if (status === 'generating') return 'Generating in Veo3...';
+  if (status === 'completed') return 'Generate Again in Veo3';
+  if (status === 'failed') return 'Retry in Veo3';
+  return 'Step 2: Test in Veo3';
+}
+
+function getClipStatusBadge(status: BRollClip['status']): { background: string; color: string } {
+  if (status === 'ready') return { background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' };
+  if (status === 'generating') return { background: 'rgba(234, 179, 8, 0.15)', color: 'var(--warning)' };
+  if (status === 'completed') return { background: 'rgba(34, 197, 94, 0.15)', color: 'var(--success)' };
+  if (status === 'failed') return { background: 'rgba(248, 113, 113, 0.15)', color: '#f87171' };
+  return { background: 'rgba(156, 163, 175, 0.2)', color: 'var(--text-secondary)' };
+}
+
+function buildBRollShot(params: {
+  clip: BRollClip;
+  prompt: string;
+  negativePrompt: string;
+  durationSeconds: number;
+}): Shot {
+  return {
+    id: `broll-shot-${params.clip.id}`,
+    sceneId: 'broll',
+    sequenceOrder: 0,
+    durationSeconds: Math.max(4, Math.min(8, Math.round(params.durationSeconds))),
+    prompt: {
+      camera: {
+        shotType: 'WIDE SHOT',
+        movement: 'SMOOTH TRACKING',
+        lens: '35mm',
+        angle: 'EYE LEVEL',
+      },
+      subject: {
+        description: params.clip.description,
+        characters: [],
+        action: params.prompt,
+      },
+      setting: {
+        location: params.clip.category,
+        timeOfDay: '',
+        weather: '',
+        productionDesign: '',
+      },
+      lighting: {
+        style: 'cinematic',
+        colorTemperature: '',
+        sources: '',
+      },
+      style: {
+        filmStock: '',
+        colorGrade: '',
+        era: '',
+        reference: '',
+      },
+      audio: {
+        dialogue: [],
+        sfx: [],
+        ambient: '',
+        music: '',
+      },
+      negativePrompt: params.negativePrompt,
+    },
+    psychology: {
+      targetEmotion: 'neutral',
+      arousalLevel: 5,
+      valence: 0,
+      transportationCues: [],
+      identificationMode: 'absorption',
+      schemaRelationship: 'conforming',
+      storyArcPosition: 'rising',
+      suspenseCalibration: {
+        informationAsymmetry: 'none',
+        outcomeProbability: 0.5,
+      },
+    },
+    renderedPrompts: {
+      veo3: params.prompt,
+      generic: params.prompt,
+    },
+    generations: [],
+    boardStatus: 'ready',
+    boardOrder: 0,
+    targetPlatform: BROLL_PROMPT_PLATFORM,
+  };
 }
 
 const labelStyle: React.CSSProperties = {

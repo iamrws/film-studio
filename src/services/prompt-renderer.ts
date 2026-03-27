@@ -16,9 +16,17 @@
  * - Grok:       Simple focused single-scene prompt
  */
 
-import type { Shot } from '../types/scene';
+import type { Shot, CanonicalPrompt } from '../types/scene';
 import type { GlobalStyle } from '../types/project';
 import type { Character } from '../types/character';
+import {
+  normalizeCameraAngle,
+  normalizeCameraMovement,
+  normalizeCameraShotType,
+  normalizeLightingStyle,
+  normalizeLens,
+} from '../config/cinematography-vocabulary';
+import { optimizePromptForPlatform } from './prompt-intelligence';
 
 // ─── Helper: resolve character anchors ───────────────────
 
@@ -47,8 +55,21 @@ function resolveCharacters(
 // ─── Helper: map arousal to Kling motion intensity (0-3) ─
 
 function arousalToMotionIntensity(arousal: number): number {
-  // arousal is 0-1, map to 0-3 scale
-  return Math.round(arousal * 3 * 10) / 10;
+  // arousal is 1-10, map to Kling's 0-3 motion scale
+  const clamped = Math.max(1, Math.min(10, arousal));
+  const normalized = (clamped - 1) / 9;
+  return Math.round(normalized * 3 * 10) / 10;
+}
+
+function ensureMotionEndpoint(action: string): string {
+  const trimmed = action.trim().replace(/[.\s]+$/, '');
+  if (!trimmed) {
+    return 'The motion resolves and then settles back into place.';
+  }
+  if (/(settles|comes to rest|holds at end|stops|steadies)/i.test(trimmed)) {
+    return `${trimmed}.`;
+  }
+  return `${trimmed}, then settles back into place.`;
 }
 
 // ─── Helper: truncate at sentence boundary ───────────────
@@ -67,6 +88,33 @@ function truncateAtSentence(text: string, maxChars: number): string {
 function truncateWords(text: string, maxWords: number): string {
   const words = text.split(/\s+/);
   return words.length > maxWords ? words.slice(0, maxWords).join(' ') : text;
+}
+
+function normalizePromptForRendering(
+  prompt: CanonicalPrompt,
+  globalStyle: GlobalStyle
+): CanonicalPrompt {
+  return {
+    ...prompt,
+    camera: {
+      ...prompt.camera,
+      shotType: normalizeCameraShotType(prompt.camera.shotType),
+      movement: normalizeCameraMovement(prompt.camera.movement),
+      angle: normalizeCameraAngle(prompt.camera.angle),
+      lens: normalizeLens(prompt.camera.lens || globalStyle.defaultLens),
+    },
+    lighting: {
+      ...prompt.lighting,
+      style: normalizeLightingStyle(prompt.lighting.style || globalStyle.defaultLighting),
+    },
+  };
+}
+
+function normalizeShotForRendering(shot: Shot, globalStyle: GlobalStyle): Shot {
+  return {
+    ...shot,
+    prompt: normalizePromptForRendering(shot.prompt, globalStyle),
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -240,7 +288,7 @@ export function renderKling3Prompt(
   // 1. Subject Details
   const chars = resolveCharacters(p.subject.characters, characters);
   if (chars.length > 0) {
-    parts.push(chars.map((c) => c.anchor).join('. '));
+    parts.push(`++${chars.map((c) => c.anchor).join('. ')}++`);
   }
 
   // 2. Environment Description
@@ -262,13 +310,13 @@ export function renderKling3Prompt(
 
   // 6. Motion Specifications (with physics-descriptive action)
   const motionIntensity = arousalToMotionIntensity(shot.psychology.arousalLevel);
-  parts.push(`Motion intensity ${motionIntensity}. ${p.subject.action}`);
+  parts.push(`Motion intensity ${motionIntensity}. ${ensureMotionEndpoint(p.subject.action)}`);
 
   // 7. Dialogue or Audio Cues
   const audioParts: string[] = [];
   for (const d of p.audio.dialogue) {
-    const voiceDesc = d.parenthetical ? `, ${d.parenthetical}` : '';
-    audioParts.push(`${d.characterName}${voiceDesc}: "${d.text}"`);
+    const voiceDesc = d.parenthetical ? ` (${d.parenthetical})` : '';
+    audioParts.push(`[Speaker: ${d.characterName}]${voiceDesc} "${d.text}"`);
   }
   if (p.audio.sfx.length > 0) audioParts.push(p.audio.sfx.join(', '));
   if (p.audio.ambient) audioParts.push(p.audio.ambient);
@@ -679,16 +727,31 @@ export function renderAllPrompts(
   globalStyle: GlobalStyle,
   characters: Character[]
 ): Shot['renderedPrompts'] {
+  const normalizedShot = normalizeShotForRendering(shot, globalStyle);
+
+  const rawPrompts: Shot['renderedPrompts'] = {
+    veo3: renderVeo3Prompt(normalizedShot, globalStyle, characters),
+    sora2: renderSora2Prompt(normalizedShot, globalStyle, characters),
+    kling3: renderKling3Prompt(normalizedShot, globalStyle, characters),
+    seedance2: renderSeedance2Prompt(normalizedShot, globalStyle, characters),
+    runwayGen4: renderRunwayGen4Prompt(normalizedShot, globalStyle, characters),
+    hailuo: renderHailuoPrompt(normalizedShot, globalStyle, characters),
+    wan: renderWanPrompt(normalizedShot, globalStyle, characters),
+    ltx: renderLtxPrompt(normalizedShot, globalStyle, characters),
+    grok: renderGrokPrompt(normalizedShot, globalStyle, characters),
+    generic: renderGenericPrompt(normalizedShot, globalStyle, characters),
+  };
+
   return {
-    veo3: renderVeo3Prompt(shot, globalStyle, characters),
-    sora2: renderSora2Prompt(shot, globalStyle, characters),
-    kling3: renderKling3Prompt(shot, globalStyle, characters),
-    seedance2: renderSeedance2Prompt(shot, globalStyle, characters),
-    runwayGen4: renderRunwayGen4Prompt(shot, globalStyle, characters),
-    hailuo: renderHailuoPrompt(shot, globalStyle, characters),
-    wan: renderWanPrompt(shot, globalStyle, characters),
-    ltx: renderLtxPrompt(shot, globalStyle, characters),
-    grok: renderGrokPrompt(shot, globalStyle, characters),
-    generic: renderGenericPrompt(shot, globalStyle, characters),
+    veo3: optimizePromptForPlatform({ platform: 'veo3', prompt: rawPrompts.veo3 || '', shot: normalizedShot, globalStyle }),
+    sora2: optimizePromptForPlatform({ platform: 'sora2', prompt: rawPrompts.sora2 || '', shot: normalizedShot, globalStyle }),
+    kling3: optimizePromptForPlatform({ platform: 'kling3', prompt: rawPrompts.kling3 || '', shot: normalizedShot, globalStyle }),
+    seedance2: optimizePromptForPlatform({ platform: 'seedance2', prompt: rawPrompts.seedance2 || '', shot: normalizedShot, globalStyle }),
+    runwayGen4: optimizePromptForPlatform({ platform: 'runwayGen4', prompt: rawPrompts.runwayGen4 || '', shot: normalizedShot, globalStyle }),
+    hailuo: optimizePromptForPlatform({ platform: 'hailuo', prompt: rawPrompts.hailuo || '', shot: normalizedShot, globalStyle }),
+    wan: optimizePromptForPlatform({ platform: 'wan', prompt: rawPrompts.wan || '', shot: normalizedShot, globalStyle }),
+    ltx: optimizePromptForPlatform({ platform: 'ltx', prompt: rawPrompts.ltx || '', shot: normalizedShot, globalStyle }),
+    grok: optimizePromptForPlatform({ platform: 'grok', prompt: rawPrompts.grok || '', shot: normalizedShot, globalStyle }),
+    generic: optimizePromptForPlatform({ platform: 'generic', prompt: rawPrompts.generic, shot: normalizedShot, globalStyle }),
   };
 }
