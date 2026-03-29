@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { FilmProject, GlobalStyle, ProjectSettings, BRollClip, QueuePlatformSettings, QueueSettings } from '../types/project';
+import type { FilmProject, GlobalStyle, ProjectSettings, BRollClip, QueuePlatformSettings, QueueSettings, ConceptContext } from '../types/project';
 import type { Character } from '../types/character';
 import type { Generation, PlatformId, Shot, ShotBoardStatus } from '../types/scene';
 import { createDefaultQueueSettings, createEmptyProject } from '../types/project';
@@ -48,6 +48,7 @@ interface ProjectState {
   addBRollClip: (clip: BRollClip) => void;
   updateBRollClip: (clipId: string, updates: Partial<BRollClip>) => void;
   removeBRollClip: (clipId: string) => void;
+  setConceptContext: (ctx: ConceptContext) => void;
   loadProject: (project: FilmProject) => void;
   resetProject: () => void;
 
@@ -178,7 +179,12 @@ function normalizeProject(project: FilmProject): FilmProject {
     shots: scene.shots.map((shot, index) => normalizeShot(shot, fallbackPlatform, index)),
   }));
 
-  return reindexBoardOrders({ ...project, scenes, settings: normalizedSettings });
+  return reindexBoardOrders({
+    ...project,
+    scenes,
+    settings: normalizedSettings,
+    conceptContext: project.conceptContext ?? null,
+  });
 }
 
 function updateShotById(
@@ -609,14 +615,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }),
     })),
 
+  setConceptContext: (ctx) =>
+    set((state) => ({
+      isDirty: true,
+      project: {
+        ...state.project,
+        conceptContext: ctx,
+        metadata: { ...state.project.metadata, modified: new Date().toISOString() },
+      },
+    })),
+
   loadProject: (project) => set({ project: normalizeProject({ ...project, bRollClips: project.bRollClips || [] }), isDirty: false }),
 
-  resetProject: () => set({
-    project: createEmptyProject(),
-    filePath: null,
-    isDirty: false,
-    lastSaved: null,
-  }),
+  resetProject: () => {
+    const savedKeys = loadApiKeys();
+    const fresh = createEmptyProject();
+    if (Object.keys(savedKeys).length > 0) {
+      fresh.settings.apiKeys = { ...fresh.settings.apiKeys, ...savedKeys };
+    }
+    set({
+      project: fresh,
+      filePath: null,
+      isDirty: false,
+      lastSaved: null,
+    });
+  },
 
   // Persistence
 

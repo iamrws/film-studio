@@ -59,6 +59,14 @@ export interface ProjectSettings {
   queue: QueueSettings;
 }
 
+export interface ConceptContext {
+  concept: string;
+  genre: string;
+  tone: string;
+  targetLength: 'short' | 'medium' | 'feature';
+  additionalNotes: string;
+}
+
 export interface FilmProject {
   metadata: {
     title: string;
@@ -74,6 +82,7 @@ export interface FilmProject {
   scenes: Scene[];
   bRollClips: BRollClip[];
   settings: ProjectSettings;
+  conceptContext: ConceptContext | null;
 }
 
 export function createDefaultQueueSettings(): QueueSettings {
@@ -123,6 +132,7 @@ export function createEmptyProject(title = 'Untitled'): FilmProject {
     },
     scenes: [],
     bRollClips: [],
+    conceptContext: null,
     settings: {
       defaultPlatform: 'veo3',
       llmProvider: 'claude',
