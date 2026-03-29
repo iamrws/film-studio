@@ -36,6 +36,7 @@ export function ShotDesigner() {
   const scenes = useProjectStore((s) => s.project.scenes);
   const characters = useProjectStore((s) => s.project.characterBible.characters);
   const globalStyle = useProjectStore((s) => s.project.globalStyle);
+  const conceptContext = useProjectStore((s) => s.project.conceptContext);
   const settings = useProjectStore((s) => s.project.settings);
   const selectedSceneIndex = useProjectStore((s) => s.selectedSceneIndex);
   const setSelectedScene = useProjectStore((s) => s.setSelectedScene);
@@ -75,6 +76,9 @@ export function ShotDesigner() {
           scene: selectedScene,
           characters,
           globalStyle,
+          conceptContext: conceptContext
+            ? { concept: conceptContext.concept, tone: conceptContext.tone || undefined, additionalNotes: conceptContext.additionalNotes || undefined }
+            : undefined,
         },
         {
           provider: settings.llmProvider,

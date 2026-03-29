@@ -9,6 +9,7 @@ export function CharacterBible() {
   const characters = useProjectStore((s) => s.project.characterBible.characters);
   const scenes = useProjectStore((s) => s.project.scenes);
   const settings = useProjectStore((s) => s.project.settings);
+  const conceptContext = useProjectStore((s) => s.project.conceptContext);
   const updateCharacters = useProjectStore((s) => s.updateCharacters);
 
   const [extracting, setExtracting] = useState(false);
@@ -39,7 +40,10 @@ export function CharacterBible() {
       const extracted = await extractCharactersFromScreenplay(
         rawText,
         detectedCharacters,
-        { provider: settings.llmProvider, apiKey }
+        { provider: settings.llmProvider, apiKey },
+        conceptContext
+          ? { concept: conceptContext.concept, genre: conceptContext.genre || undefined, tone: conceptContext.tone || undefined }
+          : undefined
       );
 
       const fullCharacters: Character[] = extracted.map((c) => ({
