@@ -60,6 +60,13 @@ SCREENPLAY FORMAT RULES:
 - Action lines: Present tense, vivid, visual — describe what the CAMERA SEES
 - Dialogue: Natural, subtext-rich, every line serves character or plot
 
+CHARACTER DESCRIPTION RULES (CRITICAL FOR VIDEO GENERATION):
+- On FIRST APPEARANCE of every character, write a detailed 2-3 sentence physical description in the action line
+- Include: approximate age, ethnicity, build, hair color/style, distinctive facial features, clothing, and one unique physical trait
+- Example: "SARAH CHEN (32) sits hunched over her laptop. She's petite with sharp cheekbones, jet-black hair cut in a severe bob, wire-rimmed glasses perched on a narrow nose. She wears an oversized navy cardigan over a faded MIT t-shirt, her fingers covered in ink stains."
+- Do NOT use vague descriptions like "attractive woman" or "ordinary-looking man" — every character must be visually specific and distinct
+- When characters appear in subsequent scenes, briefly reinforce key visual identifiers in the action line
+
 STRUCTURAL RULES:
 - Open with FADE IN:
 - End with FADE TO BLACK.
@@ -75,6 +82,11 @@ QUALITY STANDARDS:
 - Include sensory details in action lines (textures, sounds, temperatures, smells)
 - Create visual motifs that can recur across scenes
 - Build emotional crescendos — the story should FEEL like something
+
+FIDELITY RULE:
+- The screenplay MUST faithfully execute the user's concept. Do not drift into a different story.
+- Every major element mentioned in the concept must appear in the screenplay.
+- If the concept mentions specific characters, settings, or events — they must be central, not side details.
 
 Return ONLY the screenplay text in standard format. No commentary, no notes, no markdown.`;
 
