@@ -234,7 +234,9 @@ export function Dashboard() {
       }
 
       setDegenStep('DEGEN MODE COMPLETE');
-      addLog('Pipeline complete. Check the Generation Queue for progress.');
+      addLog('Pipeline complete. Navigating to Generation Queue...');
+      // Auto-navigate so user doesn't have to click through
+      setActiveScreen(totalShots > 0 ? 'queue' : 'shots');
 
     } catch (err) {
       if ((err as Error).message === 'Aborted') {

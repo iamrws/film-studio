@@ -483,12 +483,17 @@ async function callClaude(
     messages: [{ role: 'user', content: userPrompt }],
   };
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const isDev = import.meta.env.DEV;
+  const baseUrl = isDev
+    ? '/claude-api/v1/messages'
+    : 'https://api.anthropic.com/v1/messages';
+  const response = await fetch(baseUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': config.apiKey,
       'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify(body),
   });
