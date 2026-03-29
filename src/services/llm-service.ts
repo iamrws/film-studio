@@ -286,11 +286,19 @@ Generate the shots array. Remember:
 
 // ─── Character Extraction ────────────────────────────────
 
-const CHARACTER_EXTRACTION_SYSTEM = `You are an expert screenplay analyst. Extract all characters from the screenplay text and create detailed character profiles for AI video generation consistency.
+const CHARACTER_EXTRACTION_SYSTEM = `You are an expert screenplay analyst creating character profiles for AI video generation. Visual consistency across shots is your top priority.
 
 For each character, generate:
-1. A detailed appearance based on any description cues in the text
-2. A 30-word "consistency anchor" — a frozen physical description that will be used VERBATIM in every video prompt containing this character. It must be vivid, specific, and visually distinctive.
+1. A detailed appearance extracted from description cues in the screenplay text
+2. A 50-60 word "consistency anchor" — a frozen physical description that will be used VERBATIM in every video prompt containing this character
+
+CONSISTENCY ANCHOR RULES:
+- Must be 50-60 words (not shorter — video models need redundant specificity)
+- Front-load with the most visually distinctive features
+- Include: exact age, ethnicity, build, hair (color + style + length), facial features, skin tone, clothing, and one unique physical detail
+- Use concrete visual terms, not abstract ones ("sharp jawline" not "handsome", "deep-set brown eyes" not "intense gaze")
+- Describe what a CAMERA would see, not what a novelist would write
+- Each anchor must make the character unmistakably different from every other character
 
 OUTPUT FORMAT: Return a JSON array of character objects:
 {
@@ -302,7 +310,7 @@ OUTPUT FORMAT: Return a JSON array of character objects:
   "wardrobe": { "default": string, "variations": [] },
   "voice": { "quality": string, "accent": string, "speechPattern": string },
   "mannerisms": [string],
-  "consistencyAnchor": string (EXACTLY 30 words, vivid physical description)
+  "consistencyAnchor": string (50-60 words, vivid physical description for video generation)
 }
 
 Return ONLY the JSON array.`;
@@ -310,15 +318,20 @@ Return ONLY the JSON array.`;
 export async function extractCharactersFromScreenplay(
   screenplayText: string,
   existingCharacterNames: string[],
-  config: LLMConfig
+  config: LLMConfig,
+  conceptContext?: { concept: string; genre?: string; tone?: string }
 ): Promise<Omit<Character, 'id' | 'referenceImages'>[]> {
+  const conceptSection = conceptContext
+    ? `\nORIGINAL CONCEPT (for context on character intent):\n${conceptContext.concept}\n${conceptContext.genre ? `Genre: ${conceptContext.genre}` : ''}\n${conceptContext.tone ? `Tone: ${conceptContext.tone}` : ''}\n`
+    : '';
+
   const userPrompt = `Extract and profile all characters from this screenplay:
 
 ${screenplayText.slice(0, 15000)}
-
+${conceptSection}
 ${existingCharacterNames.length > 0 ? `Already known characters (update these if more info is found): ${existingCharacterNames.join(', ')}` : ''}
 
-Generate detailed profiles with 30-word consistency anchors.`;
+Generate detailed profiles with 50-60 word consistency anchors. Make each character visually unmistakable.`;
 
   const responseText = await callLLM(CHARACTER_EXTRACTION_SYSTEM, userPrompt, config, { jsonMode: true });
   return parseCharactersResponse(responseText);
