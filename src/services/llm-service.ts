@@ -157,6 +157,11 @@ CRITICAL RULES:
 7. Use positive, direct phrasing. Do NOT write negative directives such as "no camera movement" or "without motion."
 8. One shot equals one clear visual beat. Do not describe multiple scene changes inside a single shot.
 
+CONCEPT FIDELITY:
+- The ORIGINAL CONCEPT section below describes the creator's vision. Every shot must serve this vision.
+- If the screenplay drifted from the concept, pull the shots BACK toward the original intent.
+- Prioritize the emotional core and key imagery the creator described.
+
 PSYCHOLOGY-INFORMED SHOT DESIGN:
 - Emotional beats → CLOSE-UP or MEDIUM CLOSE-UP (empathy via embodied simulation)
 - Power dynamics → LOW ANGLE for dominance, HIGH ANGLE for vulnerability
@@ -222,6 +227,7 @@ interface ShotDecompositionInput {
   globalStyle: GlobalStyle;
   genre?: string;
   storyArcContext?: string;
+  conceptContext?: { concept: string; tone?: string; additionalNotes?: string };
 }
 
 export async function decomposeSceneIntoShots(
@@ -250,6 +256,10 @@ export async function decomposeSceneIntoShots(
     ? `\nSTORY ARC CONTEXT: ${storyArcContext}`
     : '';
 
+  const conceptBlock = input.conceptContext
+    ? `\nORIGINAL CONCEPT (creator's vision — shots must serve this):\n"${input.conceptContext.concept}"\n${input.conceptContext.tone ? `Intended tone: ${input.conceptContext.tone}` : ''}${input.conceptContext.additionalNotes ? `\nCreator notes: ${input.conceptContext.additionalNotes}` : ''}`
+    : '';
+
   const userPrompt = `Decompose this scene into shots for AI video generation.
 
 SCENE HEADING: ${scene.heading.prefix}. ${scene.heading.location}${scene.heading.time ? ' - ' + scene.heading.time : ''}
@@ -271,7 +281,7 @@ GLOBAL STYLE:
 - Default lens: ${globalStyle.defaultLens}
 - Default lighting: ${globalStyle.defaultLighting}
 - Negative prompt: ${globalStyle.globalNegativePrompt}
-${genreContext}${arcContext}
+${genreContext}${arcContext}${conceptBlock}
 
 Generate the shots array. Remember:
 - Each shot is 3-8 seconds
