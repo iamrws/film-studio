@@ -143,6 +143,47 @@ Write the full screenplay now. Standard Hollywood format. FADE IN: to FADE TO BL
   return response;
 }
 
+// ─── Global Style Inference ─────────────────────────────
+
+const STYLE_INFERENCE_SYSTEM = `You are a cinematographer and production designer. Given a film concept, genre, and tone, infer the visual style for the entire production.
+
+OUTPUT FORMAT: Return a JSON object:
+{
+  "filmStyle": string (e.g., "gritty handheld documentary", "lush Wes Anderson symmetry", "noir high-contrast"),
+  "colorPalette": string (e.g., "desaturated teal and amber", "warm golden pastels", "cold blue-gray"),
+  "era": string (e.g., "contemporary", "1970s", "near-future"),
+  "defaultLens": string (e.g., "35mm", "50mm anamorphic", "28mm wide"),
+  "defaultLighting": string (e.g., "natural available light", "high-key studio", "low-key chiaroscuro")
+}
+
+Be specific and opinionated. Generic answers like "cinematic" or "natural" are failures.
+Return ONLY the JSON object.`;
+
+export async function inferGlobalStyle(
+  concept: string,
+  genre?: string,
+  tone?: string,
+  config?: LLMConfig
+): Promise<Partial<GlobalStyle>> {
+  if (!config) return {};
+
+  const userPrompt = `Infer the visual production style for this film:
+
+CONCEPT: ${concept}
+${genre ? `GENRE: ${genre}` : ''}
+${tone ? `TONE: ${tone}` : ''}
+
+Be specific and opinionated. What does this film LOOK like?`;
+
+  const responseText = await callLLM(STYLE_INFERENCE_SYSTEM, userPrompt, config, { jsonMode: true });
+  try {
+    const cleaned = responseText.replace(/```json\n?|\n?```/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch {
+    return {};
+  }
+}
+
 // ─── Shot Decomposition ──────────────────────────────────
 
 const SHOT_DECOMPOSITION_SYSTEM = `You are a professional film director and cinematographer with deep knowledge of visual storytelling psychology. You decompose screenplay scenes into individual shots (5-8 seconds each) for AI video generation.
