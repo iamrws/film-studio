@@ -4,6 +4,7 @@ import {
   generateScreenplay,
   extractCharactersFromScreenplay,
   decomposeSceneIntoShots,
+  inferGlobalStyle,
 } from '../services/llm-service';
 import { renderAllPrompts } from '../services/prompt-renderer';
 import { generationQueue } from '../services/generation-queue';
@@ -33,6 +34,8 @@ export function Dashboard() {
   const parseCurrentScreenplay = useProjectStore((s) => s.parseCurrentScreenplay);
   const updateProjectTitle = useProjectStore((s) => s.updateProjectTitle);
   const setActiveScreen = useProjectStore((s) => s.setActiveScreen);
+  const setConceptContext = useProjectStore((s) => s.setConceptContext);
+  const updateGlobalStyle = useProjectStore((s) => s.updateGlobalStyle);
 
   const [concept, setConcept] = useState('');
   const [genre, setGenre] = useState('');
@@ -105,18 +108,43 @@ export function Dashboard() {
     setError(null);
 
     const llmConfig = { provider: settings.llmProvider, apiKey } as const;
+    const conceptCtx = {
+      concept: concept.trim(),
+      genre: genre || '',
+      tone: tone || '',
+      targetLength,
+      additionalNotes: additionalNotes.trim(),
+    };
 
     try {
-      // Step 1: Generate Screenplay
+      // Step 0: Save concept context so it persists across the project
+      setConceptContext(conceptCtx);
+
+      // Step 1: Infer global visual style from concept
+      setDegenStep('Inferring visual style...');
+      addLog('Analyzing concept for visual style...');
+      const inferredStyle = await inferGlobalStyle(
+        conceptCtx.concept,
+        conceptCtx.genre || undefined,
+        conceptCtx.tone || undefined,
+        llmConfig
+      );
+      if (Object.keys(inferredStyle).length > 0) {
+        updateGlobalStyle(inferredStyle);
+        addLog(`Visual style set: ${inferredStyle.filmStyle || 'inferred'}, ${inferredStyle.colorPalette || 'auto'}`);
+      }
+      if (degenAbort.current) throw new Error('Aborted');
+
+      // Step 2: Generate Screenplay
       setDegenStep('Writing screenplay...');
       addLog('Generating screenplay from concept...');
       const screenplay = await generateScreenplay(
         {
-          concept: concept.trim(),
-          genre: genre || undefined,
-          tone: tone || undefined,
+          concept: conceptCtx.concept,
+          genre: conceptCtx.genre || undefined,
+          tone: conceptCtx.tone || undefined,
           targetLength,
-          additionalNotes: additionalNotes.trim() || undefined,
+          additionalNotes: conceptCtx.additionalNotes || undefined,
         },
         { ...llmConfig, maxTokens: 16384 }
       );
@@ -124,9 +152,9 @@ export function Dashboard() {
 
       updateScreenplayText(screenplay);
       parseCurrentScreenplay();
-      const title = concept.trim().slice(0, 60);
+      const title = conceptCtx.concept.slice(0, 60);
       updateProjectTitle(title);
-      addLog(`Screenplay generated and parsed.`);
+      addLog('Screenplay generated and parsed.');
 
       // Re-read store after parse
       let currentProject = useProjectStore.getState().project;
@@ -140,14 +168,15 @@ export function Dashboard() {
         return;
       }
 
-      // Step 2: Extract Characters
+      // Step 3: Extract Characters (with concept context)
       setDegenStep('Extracting characters...');
       addLog('Extracting character profiles from screenplay...');
       const detectedNames = currentProject.screenplay.parsed?.characters || [];
       const extractedChars = await extractCharactersFromScreenplay(
         currentProject.screenplay.rawText,
         detectedNames,
-        llmConfig
+        llmConfig,
+        { concept: conceptCtx.concept, genre: conceptCtx.genre || undefined, tone: conceptCtx.tone || undefined }
       );
       if (degenAbort.current) throw new Error('Aborted');
 
@@ -159,7 +188,7 @@ export function Dashboard() {
       useProjectStore.getState().updateCharacters(fullCharacters);
       addLog(`Extracted ${fullCharacters.length} characters with consistency anchors.`);
 
-      // Step 3: Decompose all scenes into shots
+      // Step 4: Decompose all scenes into shots (with concept context)
       setDegenStep('Decomposing scenes into shots...');
       currentProject = useProjectStore.getState().project;
 
@@ -175,7 +204,12 @@ export function Dashboard() {
               scene,
               characters: fullCharacters,
               globalStyle: currentProject.globalStyle,
-              genre: genre || undefined,
+              genre: conceptCtx.genre || undefined,
+              conceptContext: {
+                concept: conceptCtx.concept,
+                tone: conceptCtx.tone || undefined,
+                additionalNotes: conceptCtx.additionalNotes || undefined,
+              },
             },
             llmConfig
           );
@@ -205,7 +239,7 @@ export function Dashboard() {
         }
       }
 
-      // Step 4: Submit all shots to generation queue
+      // Step 5: Submit all shots to generation queue
       currentProject = useProjectStore.getState().project;
       const allShots = currentProject.scenes.flatMap((s) => s.shots);
       const totalShots = allShots.length;
@@ -235,7 +269,6 @@ export function Dashboard() {
 
       setDegenStep('DEGEN MODE COMPLETE');
       addLog('Pipeline complete. Navigating to Generation Queue...');
-      // Auto-navigate so user doesn't have to click through
       setActiveScreen(totalShots > 0 ? 'queue' : 'shots');
 
     } catch (err) {
@@ -250,7 +283,7 @@ export function Dashboard() {
     } finally {
       setDegenRunning(false);
     }
-  }, [concept, genre, tone, targetLength, additionalNotes, settings, updateScreenplayText, parseCurrentScreenplay, updateProjectTitle, addLog]);
+  }, [concept, genre, tone, targetLength, additionalNotes, settings, updateScreenplayText, parseCurrentScreenplay, updateProjectTitle, addLog, setConceptContext, updateGlobalStyle, setActiveScreen]);
 
   // If there's already a screenplay, show project overview
   if (hasScreenplay) {
