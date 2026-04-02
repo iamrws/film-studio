@@ -66,15 +66,22 @@ export function EmotionalArc() {
     const probe = document.createElement('div');
     probe.style.display = 'none';
     document.body.appendChild(probe);
-    const resolveCssColor = (varName: string): string => {
+    const resolveCssColor = (varName: string, alpha?: number): string => {
       probe.style.color = `var(${varName})`;
-      return getComputedStyle(probe).color;
+      const resolved = getComputedStyle(probe).color;
+      if (alpha != null) {
+        const match = resolved.match(/\d+/g);
+        if (match) return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`;
+      }
+      return resolved;
     };
     const bgColor = resolveCssColor('--bg-primary');
     const gridColor = resolveCssColor('--border');
     const zeroLineColor = resolveCssColor('--text-muted');
     const labelColor = resolveCssColor('--text-muted');
     const legendTextColor = resolveCssColor('--text-secondary');
+    const valenceColor = resolveCssColor('--accent');
+    const arousalColor = resolveCssColor('--transition');
     probe.remove();
 
     const dpr = window.devicePixelRatio || 1;
@@ -131,7 +138,7 @@ export function EmotionalArc() {
     });
 
     // Valence line
-    ctx.strokeStyle = '#6366f1';
+    ctx.strokeStyle = valenceColor;
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     data.forEach((d, i) => {
@@ -153,7 +160,7 @@ export function EmotionalArc() {
     });
 
     // Arousal line (scaled to same range: 1-10 → -5 to 5)
-    ctx.strokeStyle = '#f8717180';
+    ctx.strokeStyle = resolveCssColor('--transition', 0.5);
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 3]);
     ctx.beginPath();
@@ -168,14 +175,14 @@ export function EmotionalArc() {
     ctx.setLineDash([]);
 
     // Legend
-    ctx.fillStyle = '#6366f1';
+    ctx.fillStyle = valenceColor;
     ctx.fillRect(w - 140, 10, 12, 12);
     ctx.fillStyle = legendTextColor;
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText('Valence', w - 124, 20);
 
-    ctx.fillStyle = '#f87171';
+    ctx.fillStyle = arousalColor;
     ctx.fillRect(w - 140, 28, 12, 12);
     ctx.fillStyle = legendTextColor;
     ctx.fillText('Arousal', w - 124, 38);
