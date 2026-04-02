@@ -34,6 +34,8 @@ export interface LLMConfig {
   apiKey: string;
   model?: string;
   maxTokens?: number;
+  /** Request timeout in ms. Defaults to 120 000 ms (2 min). */
+  timeoutMs?: number;
 }
 
 interface ClaudeMessage {
@@ -572,6 +574,7 @@ async function callClaude(
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(config.timeoutMs ?? 120_000),
   });
 
   if (!response.ok) {
@@ -614,6 +617,7 @@ async function callGemini(
       contents: [{ parts: [{ text: userPrompt }] }],
       generationConfig,
     }),
+    signal: AbortSignal.timeout(config.timeoutMs ?? 120_000),
   });
 
   if (!response.ok) {

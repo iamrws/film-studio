@@ -458,13 +458,21 @@ export class GenerationQueue {
             }
             this.updateJob(jobId, { status: 'completed', error: undefined });
             this.emit(this.jobs.get(jobId)!, 'completed');
-          } catch {
+          } catch (downloadErr) {
+            // Download to local disk failed — fall back to the remote CDN URL so the
+            // video is still playable, but surface a warning so the user knows the
+            // file was not saved locally (CDN links may expire).
+            const downloadErrMsg = downloadErr instanceof Error ? downloadErr.message : String(downloadErr);
+            console.warn(`[GenerationQueue] Local download failed for job ${jobId}; using remote URL as fallback. Reason: ${downloadErrMsg}`);
             if (job.generation) {
               job.generation.status = 'completed';
               job.generation.completedAt = new Date().toISOString();
               job.generation.outputPath = status.outputUrl;
             }
-            this.updateJob(jobId, { status: 'completed', error: undefined });
+            this.updateJob(jobId, {
+              status: 'completed',
+              error: `Download to disk failed (${downloadErrMsg}). Video available at remote URL — save it manually before the link expires.`,
+            });
             this.emit(this.jobs.get(jobId)!, 'completed');
           }
 

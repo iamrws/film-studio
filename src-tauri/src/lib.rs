@@ -106,7 +106,11 @@ fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
 /// Download a file from a URL to a local path
 #[tauri::command]
 async fn download_file(url: String, output_path: String) -> Result<String, String> {
-    let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
     if !response.status().is_success() {
         return Err(format!("Download failed: HTTP {}", response.status()));
