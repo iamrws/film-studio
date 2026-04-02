@@ -220,7 +220,7 @@ export function Settings() {
                   </div>
                 </div>
                 {apiKeys[p.keyField] && (
-                  <span style={{ fontSize: 10, color: '#4ade80' }}>Key set</span>
+                  <span style={{ fontSize: 10, color: 'var(--emotion-very-positive)' }}>Key set</span>
                 )}
               </div>
             </div>

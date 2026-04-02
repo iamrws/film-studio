@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { useProjectStore } from '../stores/project-store';
 import type { Shot, Scene } from '../types/scene';
+import { EmptyState } from '../components/EmptyState';
 
 export function Storyboard() {
   const scenes = useProjectStore((s) => s.project.scenes);
@@ -34,11 +35,12 @@ export function Storyboard() {
     return (
       <div style={{ padding: 24, height: '100%', display: 'flex', flexDirection: 'column' }}>
         <h2 style={{ marginBottom: 20 }}>Storyboard</h2>
-        <div className="empty-state" style={{ padding: 48, flex: 1 }}>
-          <h3>No Scenes Available</h3>
-          <p style={{ marginTop: 8 }}>
-            Parse a screenplay and generate shots first to see the storyboard.
-          </p>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <EmptyState
+            icon="🎬"
+            heading="No scenes available"
+            subtext="Parse a screenplay and generate shots first to see the storyboard."
+          />
         </div>
       </div>
     );
@@ -138,7 +140,7 @@ function TimelineView({
                 justifyContent: 'center',
                 fontSize: 12,
                 fontWeight: 700,
-                color: '#fff',
+                color: 'var(--text-on-accent)',
                 flexShrink: 0,
               }}
             >
@@ -280,7 +282,7 @@ function ShotCard({
           width: 8,
           height: 8,
           borderRadius: '50%',
-          background: isComplete ? '#4ade80' : hasGenerations ? '#60a5fa' : '#555',
+          background: isComplete ? 'var(--emotion-very-positive)' : hasGenerations ? 'var(--status-active)' : 'var(--bg-disabled)',
         }}
         title={isComplete ? 'Generated' : hasGenerations ? 'In progress' : 'Not submitted'}
       />
@@ -324,7 +326,7 @@ function ShotCard({
             padding: '1px 5px',
             borderRadius: 3,
             background: emotionColor,
-            color: '#000',
+            color: 'var(--on-bright)',
             fontWeight: 600,
           }}
         >
@@ -348,11 +350,11 @@ function ShotCard({
 // ─── Helpers ─────────────────────────────────────────────
 
 function getEmotionColor(valence: number): string {
-  if (valence >= 3) return '#4ade80';
-  if (valence >= 1) return '#86efac';
-  if (valence >= -1) return '#fbbf24';
-  if (valence >= -3) return '#fb923c';
-  return '#f87171';
+  if (valence >= 3) return 'var(--emotion-very-positive)';
+  if (valence >= 1) return 'var(--emotion-positive)';
+  if (valence >= -1) return 'var(--emotion-neutral)';
+  if (valence >= -3) return 'var(--emotion-negative)';
+  return 'var(--transition)';
 }
 
 function formatDuration(seconds: number): string {
@@ -364,7 +366,7 @@ function formatDuration(seconds: number): string {
 
 const viewBtn: React.CSSProperties = {
   padding: '6px 12px',
-  color: 'white',
+  color: 'var(--text-on-accent)',
   border: 'none',
   borderRadius: 4,
   cursor: 'pointer',

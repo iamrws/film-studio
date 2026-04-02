@@ -70,7 +70,7 @@ export function ScreenplayEditor() {
           style={{
             padding: '10px 24px',
             background: 'var(--accent)',
-            color: '#fff',
+            color: 'var(--text-on-accent)',
             border: 'none',
             borderRadius: 6,
             cursor: 'pointer',
@@ -140,8 +140,8 @@ export function ScreenplayEditor() {
               disabled={regenerating}
               style={{
                 padding: '8px 16px',
-                background: regenerating ? '#555' : 'var(--accent)',
-                color: '#fff',
+                background: regenerating ? 'var(--bg-disabled)' : 'var(--accent)',
+                color: 'var(--text-on-accent)',
                 border: 'none',
                 borderRadius: 4,
                 cursor: regenerating ? 'not-allowed' : 'pointer',

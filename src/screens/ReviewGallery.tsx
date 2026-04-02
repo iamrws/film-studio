@@ -3,6 +3,7 @@ import { useGenerationStore } from '../stores/generation-store';
 import { useProjectStore } from '../stores/project-store';
 import { fetchVideoAsBlob, downloadVideoFile } from '../services/video-download';
 import type { QueuedJob } from '../services/generation-queue';
+import { LoadingSkeleton } from '../components/LoadingSkeleton';
 
 export function ReviewGallery() {
   const jobs = useGenerationStore((s) => s.jobs);
@@ -78,7 +79,7 @@ function ReviewCard({ job }: { job: QueuedJob }) {
       <div
         style={{
           aspectRatio: '16/9',
-          background: '#000',
+          background: 'var(--on-bright)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -91,13 +92,15 @@ function ReviewCard({ job }: { job: QueuedJob }) {
             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           />
         ) : outputPath && (!requiresGeminiAuth || Boolean(veoApiKey)) && !error ? (
-          <div style={{ color: '#888', fontSize: 12 }}>Loading video...</div>
+          <div style={{ padding: 16, width: '100%', boxSizing: 'border-box' }}>
+            <LoadingSkeleton height={80} />
+          </div>
         ) : error ? (
-          <div style={{ color: '#f87171', fontSize: 12, padding: 16, textAlign: 'center' }}>
+          <div style={{ color: 'var(--transition)', fontSize: 12, padding: 16, textAlign: 'center' }}>
             {error}
           </div>
         ) : (
-          <div style={{ color: '#666', fontSize: 12 }}>No video available</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>No video available</div>
         )}
       </div>
 
@@ -123,15 +126,15 @@ function ReviewCard({ job }: { job: QueuedJob }) {
           </span>
           <span style={{ flex: 1 }} />
 
-          {/* Rating stars */}
-          <div style={{ display: 'flex', gap: 2 }}>
+          {/* Rating stars — decorative display only */}
+          <div style={{ display: 'flex', gap: 2 }} aria-label={`Rating: ${job.generation?.rating || 0} out of 5`}>
             {[1, 2, 3, 4, 5].map((star) => (
               <span
                 key={star}
+                aria-hidden="true"
                 style={{
-                  cursor: 'pointer',
                   fontSize: 16,
-                  color: (job.generation?.rating || 0) >= star ? '#fbbf24' : '#444',
+                  color: (job.generation?.rating || 0) >= star ? 'var(--emotion-neutral)' : 'var(--color-neutral-600)',
                 }}
               >
                 ★
@@ -161,12 +164,13 @@ function ReviewCard({ job }: { job: QueuedJob }) {
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button style={actionBtn('#4ade80')}>Approve</button>
-          <button style={actionBtn('#f87171')}>Reject</button>
-          <button style={actionBtn('#60a5fa')}>Regenerate</button>
+          <button style={actionBtn('var(--emotion-very-positive)')} aria-label="Approve this shot">Approve</button>
+          <button style={actionBtn('var(--transition)')} aria-label="Reject this shot">Reject</button>
+          <button style={actionBtn('var(--status-active)')} aria-label="Regenerate this shot">Regenerate</button>
           {blobUrl && (
             <button
-              style={actionBtn('#fbbf24')}
+              style={actionBtn('var(--emotion-neutral)')}
+              aria-label={`Download shot ${job.shot.id}`}
               onClick={() => downloadVideoFile(blobUrl, `shot_${job.shot.id}.mp4`)}
             >
               Download

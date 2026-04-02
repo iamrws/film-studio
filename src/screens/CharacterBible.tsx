@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useProjectStore } from '../stores/project-store';
 import { extractCharactersFromScreenplay } from '../services/llm-service';
 import type { Character } from '../types/character';
+import { EmptyState } from '../components/EmptyState';
 
 export function CharacterBible() {
   const parsed = useProjectStore((s) => s.project.screenplay.parsed);
@@ -73,8 +74,8 @@ export function CharacterBible() {
           disabled={extracting || !rawText}
           style={{
             padding: '8px 16px',
-            background: extracting ? '#555' : 'var(--accent)',
-            color: '#fff',
+            background: extracting ? 'var(--bg-disabled)' : 'var(--accent)',
+            color: 'var(--text-on-accent)',
             border: 'none',
             borderRadius: 6,
             cursor: extracting ? 'not-allowed' : 'pointer',
@@ -94,10 +95,10 @@ export function CharacterBible() {
         <div
           style={{
             padding: '10px 14px',
-            background: '#f8717120',
-            border: '1px solid #f87171',
+            background: 'var(--error-subtle-bg)',
+            border: '1px solid var(--transition)',
             borderRadius: 6,
-            color: '#f87171',
+            color: 'var(--transition)',
             fontSize: 12,
             marginBottom: 16,
           }}
@@ -113,10 +114,11 @@ export function CharacterBible() {
       )}
 
       {detectedCharacters.length === 0 && characters.length === 0 ? (
-        <div className="empty-state">
-          <h3>No characters detected</h3>
-          <p>Parse a screenplay first to auto-detect characters.</p>
-        </div>
+        <EmptyState
+          icon="🎭"
+          heading="No characters yet"
+          subtext="Parse a screenplay first to auto-detect characters, then extract full profiles with AI."
+        />
       ) : (
         <>
           <p style={{ color: 'var(--text-secondary)', marginBottom: 16, fontSize: 13 }}>

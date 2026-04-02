@@ -205,7 +205,7 @@ export function BRollStudio() {
                   borderRadius: 4,
                   border: `1px solid ${selectedStyle === s ? 'var(--accent)' : 'var(--border)'}`,
                   background: selectedStyle === s ? 'var(--accent)' : 'var(--bg-primary)',
-                  color: selectedStyle === s ? '#fff' : 'var(--text-primary)',
+                  color: selectedStyle === s ? 'var(--text-on-accent)' : 'var(--text-primary)',
                   cursor: 'pointer',
                 }}
               >
@@ -220,10 +220,10 @@ export function BRollStudio() {
           {error && (
             <div style={{
               padding: '8px 12px',
-              background: '#f8717120',
-              border: '1px solid #f87171',
+              background: 'var(--error-subtle-bg)',
+              border: '1px solid var(--transition)',
               borderRadius: 6,
-              color: '#f87171',
+              color: 'var(--transition)',
               fontSize: 12,
               marginBottom: 12,
             }}>
@@ -240,8 +240,8 @@ export function BRollStudio() {
               fontWeight: 700,
               borderRadius: 8,
               border: 'none',
-              background: generating || !description.trim() ? '#555' : 'var(--accent)',
-              color: '#fff',
+              background: generating || !description.trim() ? 'var(--bg-disabled)' : 'var(--accent)',
+              color: 'var(--text-on-accent)',
               cursor: generating || !description.trim() ? 'not-allowed' : 'pointer',
             }}
           >
@@ -352,7 +352,7 @@ export function BRollStudio() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{
                             padding: '2px 8px',
-                            background: 'rgba(99, 102, 241, 0.15)',
+                            background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
                             color: 'var(--accent)',
                             borderRadius: 10,
                             fontSize: 11,
@@ -428,7 +428,7 @@ export function BRollStudio() {
                               ...actionBtn,
                               borderColor: 'var(--accent)',
                               background: 'var(--accent)',
-                              color: '#fff',
+                              color: 'var(--text-on-accent)',
                               cursor: clip.status === 'generating' ? 'not-allowed' : 'pointer',
                               opacity: clip.status === 'generating' ? 0.7 : 1,
                             }}
@@ -460,7 +460,7 @@ export function BRollStudio() {
                                 setExpandedClipId(null);
                               }
                             }}
-                            style={{ ...actionBtn, borderColor: '#f87171', color: '#f87171' }}
+                            style={{ ...actionBtn, borderColor: 'var(--transition)', color: 'var(--transition)' }}
                           >
                             Remove
                           </button>
@@ -525,11 +525,11 @@ function getVeo3ActionLabel(status: BRollClip['status']): string {
 }
 
 function getClipStatusBadge(status: BRollClip['status']): { background: string; color: string } {
-  if (status === 'ready') return { background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' };
-  if (status === 'generating') return { background: 'rgba(234, 179, 8, 0.15)', color: 'var(--warning)' };
-  if (status === 'completed') return { background: 'rgba(34, 197, 94, 0.15)', color: 'var(--success)' };
-  if (status === 'failed') return { background: 'rgba(248, 113, 113, 0.15)', color: '#f87171' };
-  return { background: 'rgba(156, 163, 175, 0.2)', color: 'var(--text-secondary)' };
+  if (status === 'ready') return { background: 'color-mix(in srgb, var(--status-ready) 15%, transparent)', color: 'var(--status-ready)' };
+  if (status === 'generating') return { background: 'color-mix(in srgb, var(--warning) 15%, transparent)', color: 'var(--warning)' };
+  if (status === 'completed') return { background: 'color-mix(in srgb, var(--success) 15%, transparent)', color: 'var(--success)' };
+  if (status === 'failed') return { background: 'color-mix(in srgb, var(--transition) 15%, transparent)', color: 'var(--transition)' };
+  return { background: 'color-mix(in srgb, var(--text-secondary) 20%, transparent)', color: 'var(--text-secondary)' };
 }
 
 function buildBRollShot(params: {

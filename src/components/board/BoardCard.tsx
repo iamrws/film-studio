@@ -66,12 +66,14 @@ export function BoardCard({
               onChange={() => onToggleSelect(shot.id)}
               onClick={(e) => e.stopPropagation()}
               title="Select for batch actions"
+              aria-label="Select shot for batch actions"
             />
           )}
           <button
             {...attributes}
             {...listeners}
-            title="Drag"
+            title="Drag to reorder"
+            aria-label="Drag to reorder"
             style={{
               background: 'var(--bg-tertiary)',
               border: '1px solid var(--border)',
@@ -89,6 +91,8 @@ export function BoardCard({
 
       <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 10, marginTop: 8 }}>
         <div
+          role="img"
+          aria-label="Shot preview placeholder"
           style={{
             height: 56,
             borderRadius: 'var(--radius-md)',
@@ -189,6 +193,7 @@ export function BoardCard({
         <select
           value={shot.targetPlatform}
           onChange={(e) => onPlatformChange(shot.id, e.target.value as PlatformId)}
+          aria-label="Target platform for this shot"
           style={{
             padding: '6px 8px',
             background: 'var(--bg-primary)',

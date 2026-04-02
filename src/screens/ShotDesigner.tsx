@@ -205,7 +205,11 @@ export function ShotDesigner() {
             <div
               key={scene.id}
               className={`scene-tree-item ${selectedSceneIndex === i ? 'selected' : ''}`}
+              role="button"
+              tabIndex={0}
+              aria-pressed={selectedSceneIndex === i}
               onClick={() => setSelectedScene(i)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedScene(i); } }}
             >
               <div className="scene-number">Scene {i + 1}</div>
               <div className="scene-heading" style={{ fontSize: 11 }}>
@@ -229,7 +233,11 @@ export function ShotDesigner() {
               fontSize: 11,
               cursor: 'pointer',
             }}
+            role="button"
+            tabIndex={0}
+            aria-label="Open Generation Queue"
             onClick={() => setActiveScreen('queue')}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveScreen('queue'); } }}
           >
             <div style={{ fontWeight: 600, marginBottom: 4 }}>Generation Queue</div>
             <div>{generationStats.active} active | {generationStats.completed} done | {generationStats.failed} failed</div>
@@ -269,8 +277,8 @@ export function ShotDesigner() {
                   disabled={generating}
                   style={{
                     padding: '8px 16px',
-                    background: generating ? '#555' : 'var(--accent)',
-                    color: 'white',
+                    background: generating ? 'var(--bg-disabled)' : 'var(--accent)',
+                    color: 'var(--text-on-accent)',
                     border: 'none',
                     borderRadius: 6,
                     cursor: generating ? 'not-allowed' : 'pointer',
@@ -284,8 +292,8 @@ export function ShotDesigner() {
                     onClick={handleSubmitAll}
                     style={{
                       padding: '8px 16px',
-                      background: '#4ade80',
-                      color: '#000',
+                      background: 'var(--emotion-very-positive)',
+                      color: 'var(--on-bright)',
                       border: 'none',
                       borderRadius: 6,
                       cursor: 'pointer',
@@ -304,10 +312,10 @@ export function ShotDesigner() {
               <div
                 style={{
                   padding: '10px 14px',
-                  background: '#f8717120',
-                  border: '1px solid #f87171',
+                  background: 'var(--error-subtle-bg)',
+                  border: '1px solid var(--transition)',
                   borderRadius: 6,
-                  color: '#f87171',
+                  color: 'var(--transition)',
                   fontSize: 12,
                   marginBottom: 16,
                 }}
@@ -320,10 +328,10 @@ export function ShotDesigner() {
               <div
                 style={{
                   padding: '10px 14px',
-                  background: '#4ade8020',
-                  border: '1px solid #4ade80',
+                  background: 'var(--success-subtle-bg)',
+                  border: '1px solid var(--emotion-very-positive)',
                   borderRadius: 6,
-                  color: '#4ade80',
+                  color: 'var(--emotion-very-positive)',
                   fontSize: 12,
                   marginBottom: 16,
                 }}
@@ -371,7 +379,7 @@ export function ShotDesigner() {
                             padding: '2px 6px',
                             borderRadius: 4,
                             background: getEmotionColor(shot.psychology.valence),
-                            color: '#000',
+                            color: 'var(--on-bright)',
                             fontWeight: 600,
                           }}
                         >
@@ -388,7 +396,7 @@ export function ShotDesigner() {
                           style={{
                             padding: '4px 10px',
                             background: 'var(--accent)',
-                            color: 'white',
+                            color: 'var(--text-on-accent)',
                             border: 'none',
                             borderRadius: 4,
                             cursor: 'pointer',
@@ -444,7 +452,7 @@ export function ShotDesigner() {
                               Prompt Preview
                             </div>
                             {copyFeedback && (
-                              <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 600 }}>{copyFeedback}</span>
+                              <span style={{ fontSize: 11, color: 'var(--emotion-very-positive)', fontWeight: 600 }}>{copyFeedback}</span>
                             )}
                           </div>
 
@@ -459,7 +467,7 @@ export function ShotDesigner() {
                                   fontSize: 11,
                                   border: previewPlatform === pp.id ? '1px solid var(--accent)' : '1px solid var(--border)',
                                   background: previewPlatform === pp.id ? 'var(--accent)' : 'var(--bg-tertiary)',
-                                  color: previewPlatform === pp.id ? '#fff' : 'var(--text-secondary)',
+                                  color: previewPlatform === pp.id ? 'var(--text-on-accent)' : 'var(--text-secondary)',
                                   borderRadius: 4,
                                   cursor: 'pointer',
                                 }}
@@ -491,10 +499,10 @@ export function ShotDesigner() {
                             const quality = analyzePromptForPlatform(shot, previewPlatform, previewText);
                             const qualityColor =
                               quality.score >= 85
-                                ? '#4ade80'
+                                ? 'var(--emotion-very-positive)'
                                 : quality.score >= 70
-                                  ? '#fbbf24'
-                                  : '#f87171';
+                                  ? 'var(--emotion-neutral)'
+                                  : 'var(--transition)';
 
                             return (
                               <div
@@ -600,9 +608,9 @@ export function ShotDesigner() {
 }
 
 function getEmotionColor(valence: number): string {
-  if (valence >= 3) return '#4ade80';
-  if (valence >= 1) return '#86efac';
-  if (valence >= -1) return '#fbbf24';
-  if (valence >= -3) return '#fb923c';
-  return '#f87171';
+  if (valence >= 3) return 'var(--emotion-very-positive)';
+  if (valence >= 1) return 'var(--emotion-positive)';
+  if (valence >= -1) return 'var(--emotion-neutral)';
+  if (valence >= -3) return 'var(--emotion-negative)';
+  return 'var(--transition)';
 }

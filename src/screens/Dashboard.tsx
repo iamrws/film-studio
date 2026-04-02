@@ -381,8 +381,9 @@ export function Dashboard() {
 
       {/* Concept */}
       <div style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>What's your movie about?</label>
+        <label htmlFor="concept-input" style={labelStyle}>What's your movie about?</label>
         <textarea
+          id="concept-input"
           value={concept}
           onChange={(e) => setConcept(e.target.value)}
           placeholder="A retired astronaut living alone on a farm receives a radio signal from a spacecraft she thought was lost 30 years ago. As she investigates, she realizes the signal is coming from her younger self, trapped in a time loop orbiting Jupiter..."
@@ -410,13 +411,14 @@ export function Dashboard() {
               <button
                 key={g}
                 onClick={() => setGenre(genre === g ? '' : g)}
+                aria-pressed={genre === g}
                 style={{
                   padding: '5px 10px',
                   fontSize: 12,
                   borderRadius: 4,
                   border: `1px solid ${genre === g ? 'var(--accent)' : 'var(--border)'}`,
                   background: genre === g ? 'var(--accent)' : 'var(--bg-secondary)',
-                  color: genre === g ? '#fff' : 'var(--text-primary)',
+                  color: genre === g ? 'var(--text-on-accent)' : 'var(--text-primary)',
                   cursor: 'pointer',
                 }}
               >
@@ -433,13 +435,14 @@ export function Dashboard() {
               <button
                 key={t}
                 onClick={() => setTone(tone === t ? '' : t)}
+                aria-pressed={tone === t}
                 style={{
                   padding: '5px 10px',
                   fontSize: 12,
                   borderRadius: 4,
                   border: `1px solid ${tone === t ? 'var(--accent)' : 'var(--border)'}`,
                   background: tone === t ? 'var(--accent)' : 'var(--bg-secondary)',
-                  color: tone === t ? '#fff' : 'var(--text-primary)',
+                  color: tone === t ? 'var(--text-on-accent)' : 'var(--text-primary)',
                   cursor: 'pointer',
                 }}
               >
@@ -458,13 +461,14 @@ export function Dashboard() {
             <button
               key={opt.id}
               onClick={() => setTargetLength(opt.id)}
+              aria-pressed={targetLength === opt.id}
               style={{
                 flex: 1,
                 padding: '10px 12px',
                 borderRadius: 6,
                 border: `1px solid ${targetLength === opt.id ? 'var(--accent)' : 'var(--border)'}`,
                 background: targetLength === opt.id ? 'var(--accent)' : 'var(--bg-secondary)',
-                color: targetLength === opt.id ? '#fff' : 'var(--text-primary)',
+                color: targetLength === opt.id ? 'var(--text-on-accent)' : 'var(--text-primary)',
                 cursor: 'pointer',
                 textAlign: 'center',
               }}
@@ -478,8 +482,9 @@ export function Dashboard() {
 
       {/* Additional Notes */}
       <div style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>Additional notes (optional)</label>
+        <label htmlFor="additional-notes" style={labelStyle}>Additional notes (optional)</label>
         <textarea
+          id="additional-notes"
           value={additionalNotes}
           onChange={(e) => setAdditionalNotes(e.target.value)}
           placeholder="Any specific requirements: characters, setting constraints, themes, visual style, ending preferences..."
@@ -493,10 +498,10 @@ export function Dashboard() {
         <div
           style={{
             padding: '10px 14px',
-            background: '#f8717120',
-            border: '1px solid #f87171',
+            background: 'var(--error-subtle-bg)',
+            border: '1px solid var(--transition)',
             borderRadius: 6,
-            color: '#f87171',
+            color: 'var(--transition)',
             fontSize: 12,
             marginBottom: 16,
           }}
@@ -517,8 +522,8 @@ export function Dashboard() {
             fontWeight: 700,
             borderRadius: 8,
             border: 'none',
-            background: generating || degenRunning || !concept.trim() ? '#555' : 'var(--accent)',
-            color: '#fff',
+            background: generating || degenRunning || !concept.trim() ? 'var(--bg-disabled)' : 'var(--accent)',
+            color: 'var(--text-on-accent)',
             cursor: generating || degenRunning || !concept.trim() ? 'not-allowed' : 'pointer',
           }}
         >
@@ -533,9 +538,9 @@ export function Dashboard() {
             fontSize: 16,
             fontWeight: 700,
             borderRadius: 8,
-            border: '2px solid #f59e0b',
-            background: degenRunning ? '#92400e' : generating || !concept.trim() ? '#555' : 'linear-gradient(135deg, #f59e0b, #ef4444)',
-            color: '#fff',
+            border: '2px solid var(--warning)',
+            background: degenRunning ? 'var(--warning-dark)' : generating || !concept.trim() ? 'var(--bg-disabled)' : 'linear-gradient(135deg, var(--warning), var(--error))',
+            color: 'var(--text-on-accent)',
             cursor: generating || degenRunning || !concept.trim() ? 'not-allowed' : 'pointer',
           }}
         >
@@ -566,13 +571,13 @@ export function Dashboard() {
         }}>
           <div style={{
             padding: '10px 14px',
-            background: degenRunning ? '#92400e' : 'var(--bg-tertiary)',
+            background: degenRunning ? 'var(--warning-dark)' : 'var(--bg-tertiary)',
             borderBottom: '1px solid var(--border)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
           }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: degenRunning ? '#fbbf24' : 'var(--text-primary)' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: degenRunning ? 'var(--emotion-neutral)' : 'var(--text-primary)' }}>
               {degenStep || 'Degen Mode'}
             </span>
             {degenRunning && (
@@ -581,8 +586,8 @@ export function Dashboard() {
                 style={{
                   padding: '4px 10px',
                   fontSize: 11,
-                  background: '#f87171',
-                  color: '#fff',
+                  background: 'var(--transition)',
+                  color: 'var(--text-on-accent)',
                   border: 'none',
                   borderRadius: 4,
                   cursor: 'pointer',
@@ -605,7 +610,7 @@ export function Dashboard() {
               <div key={i}>{line}</div>
             ))}
             {degenRunning && (
-              <div style={{ color: '#fbbf24', animation: 'pulse 1.5s infinite' }}>
+              <div style={{ color: 'var(--emotion-neutral)', animation: 'pulse 1.5s infinite' }}>
                 Processing...
               </div>
             )}
@@ -637,7 +642,7 @@ const inputStyle: React.CSSProperties = {
 const primaryBtn: React.CSSProperties = {
   padding: '10px 20px',
   background: 'var(--accent)',
-  color: 'white',
+  color: 'var(--text-on-accent)',
   borderRadius: 6,
   border: 'none',
   cursor: 'pointer',

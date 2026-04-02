@@ -61,6 +61,22 @@ export function EmotionalArc() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Resolve CSS custom properties via a probe element so the canvas
+    // respects the active light/dark theme.
+    const probe = document.createElement('div');
+    probe.style.display = 'none';
+    document.body.appendChild(probe);
+    const resolveCssColor = (varName: string): string => {
+      probe.style.color = `var(${varName})`;
+      return getComputedStyle(probe).color;
+    };
+    const bgColor = resolveCssColor('--bg-primary');
+    const gridColor = resolveCssColor('--border');
+    const zeroLineColor = resolveCssColor('--text-muted');
+    const labelColor = resolveCssColor('--text-muted');
+    const legendTextColor = resolveCssColor('--text-secondary');
+    probe.remove();
+
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
@@ -70,7 +86,7 @@ export function EmotionalArc() {
     const h = rect.height;
 
     // Clear
-    ctx.fillStyle = '#0f0f0f';
+    ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, w, h);
 
     const padding = { top: 30, right: 20, bottom: 40, left: 50 };
@@ -80,7 +96,7 @@ export function EmotionalArc() {
     if (data.length === 0) return;
 
     // Grid
-    ctx.strokeStyle = '#333';
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 0.5;
     for (let v = -5; v <= 5; v += 2.5) {
       const y = padding.top + plotH * (1 - (v + 5) / 10);
@@ -88,7 +104,7 @@ export function EmotionalArc() {
       ctx.moveTo(padding.left, y);
       ctx.lineTo(w - padding.right, y);
       ctx.stroke();
-      ctx.fillStyle = '#666';
+      ctx.fillStyle = labelColor;
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(v.toString(), padding.left - 6, y + 3);
@@ -96,7 +112,7 @@ export function EmotionalArc() {
 
     // Zero line
     const zeroY = padding.top + plotH * 0.5;
-    ctx.strokeStyle = '#555';
+    ctx.strokeStyle = zeroLineColor;
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
@@ -106,7 +122,7 @@ export function EmotionalArc() {
     ctx.setLineDash([]);
 
     // X labels
-    ctx.fillStyle = '#888';
+    ctx.fillStyle = labelColor;
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'center';
     data.forEach((d, i) => {
@@ -154,18 +170,18 @@ export function EmotionalArc() {
     // Legend
     ctx.fillStyle = '#6366f1';
     ctx.fillRect(w - 140, 10, 12, 12);
-    ctx.fillStyle = '#ccc';
+    ctx.fillStyle = legendTextColor;
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText('Valence', w - 124, 20);
 
     ctx.fillStyle = '#f87171';
     ctx.fillRect(w - 140, 28, 12, 12);
-    ctx.fillStyle = '#ccc';
+    ctx.fillStyle = legendTextColor;
     ctx.fillText('Arousal', w - 124, 38);
 
     // Axis labels
-    ctx.fillStyle = '#888';
+    ctx.fillStyle = labelColor;
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Scenes', w / 2, h - 4);
@@ -189,8 +205,8 @@ export function EmotionalArc() {
           disabled={analyzing || scenes.length === 0}
           style={{
             padding: '8px 16px',
-            background: analyzing ? '#555' : 'var(--accent)',
-            color: 'white',
+            background: analyzing ? 'var(--bg-disabled)' : 'var(--accent)',
+            color: 'var(--text-on-accent)',
             border: 'none',
             borderRadius: 6,
             cursor: analyzing || scenes.length === 0 ? 'not-allowed' : 'pointer',
@@ -205,10 +221,10 @@ export function EmotionalArc() {
         <div
           style={{
             padding: '10px 14px',
-            background: '#f8717120',
-            border: '1px solid #f87171',
+            background: 'var(--error-subtle-bg)',
+            border: '1px solid var(--transition)',
             borderRadius: 6,
-            color: '#f87171',
+            color: 'var(--transition)',
             fontSize: 12,
             marginBottom: 16,
           }}
@@ -345,7 +361,7 @@ export function EmotionalArc() {
                       <td style={tdS}>{sa.dominantEmotion}</td>
                       <td style={tdS}>
                         {transferRisk ? (
-                          <span style={{ color: '#fbbf24', fontWeight: 600, fontSize: 11 }}>
+                          <span style={{ color: 'var(--emotion-neutral)', fontWeight: 600, fontSize: 11 }}>
                             Excitation transfer active (delta: {arousalDelta > 0 ? '+' : ''}{arousalDelta})
                           </span>
                         ) : (
@@ -365,11 +381,11 @@ export function EmotionalArc() {
 }
 
 function getValenceColor(valence: number): string {
-  if (valence >= 3) return '#4ade80';
-  if (valence >= 1) return '#86efac';
-  if (valence >= -1) return '#fbbf24';
-  if (valence >= -3) return '#fb923c';
-  return '#f87171';
+  if (valence >= 3) return 'var(--emotion-very-positive)';
+  if (valence >= 1) return 'var(--emotion-positive)';
+  if (valence >= -1) return 'var(--emotion-neutral)';
+  if (valence >= -3) return 'var(--emotion-negative)';
+  return 'var(--transition)';
 }
 
 const thS: React.CSSProperties = {

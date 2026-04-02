@@ -49,6 +49,7 @@ export function BoardToolbar({
           value={searchQuery}
           onChange={(e) => onSearchQueryChange(e.target.value)}
           placeholder="Search camera/action/emotion..."
+          aria-label="Search shots by camera type, action, or emotion"
           style={{
             minWidth: 220,
             flex: 1,
@@ -78,6 +79,7 @@ export function BoardToolbar({
           <select
             value={bulkPlatform}
             onChange={(e) => onBulkPlatformChange(e.target.value as PlatformId)}
+            aria-label="Bulk target platform"
             style={selectStyle}
           >
             {PLATFORM_OPTIONS.map((option) => (

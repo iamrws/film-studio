@@ -60,6 +60,20 @@
 
   /* Text colour on bright/coloured backgrounds */
   --on-bright: var(--color-neutral-950);
+  --text-on-accent: var(--color-neutral-50);
+
+  /* ── UI State ───────────────────────────────────────────── */
+  --bg-disabled:       var(--color-neutral-600);
+  --error-subtle-bg:   rgba(248, 113, 113, 0.08);
+  --success-subtle-bg: rgba(74, 222, 128, 0.08);
+  --warning-dark:      #92400e;
+
+  /* ── Status Colors (Generation Queue / UI) ──────────────── */
+  --status-active:      #60a5fa;
+  --status-completed:   var(--emotion-very-positive);
+  --status-failed:      var(--transition);
+  --status-dead-letter: #fb7185;
+  --status-ready:       #3b82f6;
 
   /* ── Spacing Scale ─────────────────────────────────────── */
   --space-1:  4px;
@@ -354,7 +368,7 @@
 .editor-toolbar button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .editor-toolbar button.primary:hover {
@@ -581,4 +595,16 @@ button {
   color: #fca5a5;
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* ─── Animations ─────────────────────────────────────────── */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 0.25; }
 }

@@ -2,15 +2,16 @@ import { useEffect, useState } from 'react';
 import { useGenerationStore } from '../stores/generation-store';
 import { useProjectStore } from '../stores/project-store';
 import { fetchVideoAsBlob, downloadVideoFile } from '../services/video-download';
+import { LoadingSkeleton } from '../components/LoadingSkeleton';
 
 const STATUS_COLORS: Record<string, string> = {
-  queued: '#888',
-  submitting: '#fbbf24',
-  submitted: '#60a5fa',
-  polling: '#60a5fa',
-  downloading: '#a78bfa',
-  completed: '#4ade80',
-  failed: '#f87171',
+  queued: 'var(--text-muted)',
+  submitting: 'var(--emotion-neutral)',
+  submitted: 'var(--status-active)',
+  polling: 'var(--status-active)',
+  downloading: 'var(--film-secondary-400)',
+  completed: 'var(--emotion-very-positive)',
+  failed: 'var(--transition)',
 };
 
 export function GenerationQueue() {
@@ -22,8 +23,17 @@ export function GenerationQueue() {
   const clearFinished = useGenerationStore((s) => s.clearFinished);
   const clearDeadLetters = useGenerationStore((s) => s.clearDeadLetters);
 
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    refreshJobs();
+    setLoading(true);
+    const result = refreshJobs();
+    const done = () => setLoading(false);
+    if (result instanceof Promise) {
+      result.then(done, done);
+    } else {
+      done();
+    }
   }, [refreshJobs]);
 
   return (
@@ -45,16 +55,22 @@ export function GenerationQueue() {
 
       <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
         <StatCard label="Total" value={stats.total} />
-        <StatCard label="Queued" value={stats.queued} color="#888" />
-        <StatCard label="Active" value={stats.active} color="#60a5fa" />
-        <StatCard label="Completed" value={stats.completed} color="#4ade80" />
-        <StatCard label="Failed" value={stats.failed} color="#f87171" />
-        <StatCard label="Dead Letter" value={stats.deadLettered} color="#fb7185" />
-        <StatCard label="Cost" value={`$${stats.totalCostUsd.toFixed(2)}`} color="#fbbf24" />
+        <StatCard label="Queued" value={stats.queued} color="var(--text-muted)" />
+        <StatCard label="Active" value={stats.active} color="var(--status-active)" />
+        <StatCard label="Completed" value={stats.completed} color="var(--emotion-very-positive)" />
+        <StatCard label="Failed" value={stats.failed} color="var(--transition)" />
+        <StatCard label="Dead Letter" value={stats.deadLettered} color="var(--status-dead-letter)" />
+        <StatCard label="Cost" value={`$${stats.totalCostUsd.toFixed(2)}`} color="var(--emotion-neutral)" />
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {jobs.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <LoadingSkeleton height={44} />
+            <LoadingSkeleton height={44} />
+            <LoadingSkeleton height={44} />
+          </div>
+        ) : jobs.length === 0 ? (
           <div className="empty-state" style={{ padding: 48 }}>
             <h3>No Generation Jobs</h3>
             <p style={{ marginTop: 8 }}>
@@ -91,7 +107,7 @@ export function GenerationQueue() {
                   <td style={tdStyle}>
                     <span
                       style={{
-                        color: STATUS_COLORS[job.status] || '#888',
+                        color: STATUS_COLORS[job.status] || 'var(--text-muted)',
                         fontWeight: 600,
                         textTransform: 'uppercase',
                         fontSize: 11,
@@ -100,7 +116,7 @@ export function GenerationQueue() {
                       {job.status}
                     </span>
                     {job.error && (
-                      <div style={{ fontSize: 11, color: '#f87171', marginTop: 2, maxWidth: 400, wordBreak: 'break-word' }}>
+                      <div style={{ fontSize: 11, color: 'var(--transition)', marginTop: 2, maxWidth: 400, wordBreak: 'break-word' }}>
                         {job.error}
                       </div>
                     )}
@@ -158,7 +174,7 @@ export function GenerationQueue() {
                 <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
                   Retry count: {entry.retryCount}
                 </div>
-                <div style={{ color: '#f87171', marginTop: 2, wordBreak: 'break-word' }}>
+                <div style={{ color: 'var(--transition)', marginTop: 2, wordBreak: 'break-word' }}>
                   {entry.reason}
                 </div>
               </div>
@@ -219,7 +235,7 @@ function VideoActions({ outputPath, shotId }: { outputPath: string; shotId: stri
         <button
           onClick={handleView}
           disabled={loading}
-          style={{ ...toolbarBtn, fontSize: 11, padding: '4px 8px', background: 'var(--accent)', color: '#fff' }}
+          style={{ ...toolbarBtn, fontSize: 11, padding: '4px 8px', background: 'var(--accent)', color: 'var(--text-on-accent)' }}
         >
           {loading ? 'Loading...' : 'View'}
         </button>
@@ -231,7 +247,7 @@ function VideoActions({ outputPath, shotId }: { outputPath: string; shotId: stri
           Save
         </button>
       </div>
-      {error && <div style={{ fontSize: 10, color: '#f87171' }}>{error}</div>}
+      {error && <div style={{ fontSize: 10, color: 'var(--transition)' }}>{error}</div>}
     </div>
   );
 }
