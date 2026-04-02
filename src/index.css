@@ -1,4 +1,4 @@
-/* Reset - Film Studio dark theme baseline */
+/* ─── Design System Reset — Film Studio ──────────────────── */
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -12,26 +12,48 @@ html, body, #root {
 }
 
 body {
-  background: #0f0f0f;
-  color: #e8e8e8;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-neutral-900);
+  color: var(--color-neutral-100);
+  font-family: "Inter", "Instrument Sans", system-ui, sans-serif;
   font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar styling */
+/* ─── Scrollbar ─────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #444;
-  border-radius: 4px;
+  background: var(--color-neutral-700);
+  border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--color-neutral-600);
+}
+
+/* ─── Focus Rings (accessibility) ──────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--film-accent-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Selection ─────────────────────────────────────────── */
+::selection {
+  background: rgba(99, 102, 241, 0.3);
+  color: var(--color-neutral-50);
+}
+
+/* ─── Reduced Motion ────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
