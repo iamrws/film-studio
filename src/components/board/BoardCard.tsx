@@ -46,7 +46,7 @@ export function BoardCard({
   const cardStyle: React.CSSProperties = {
     border: `1px solid ${isDragging ? 'var(--accent)' : 'var(--border)'}`,
     background: 'var(--bg-secondary)',
-    borderRadius: 10,
+    borderRadius: 'var(--radius-md)',
     padding: 10,
     transform: CSS.Transform.toString(transform),
     transition,
@@ -76,7 +76,7 @@ export function BoardCard({
               background: 'var(--bg-tertiary)',
               border: '1px solid var(--border)',
               color: 'var(--text-secondary)',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-sm)',
               width: 24,
               height: 24,
               cursor: 'grab',
@@ -91,10 +91,10 @@ export function BoardCard({
         <div
           style={{
             height: 56,
-            borderRadius: 8,
+            borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border)',
-            background: 'linear-gradient(145deg, #1f2937 0%, #111827 100%)',
-            color: '#9ca3af',
+            background: 'linear-gradient(145deg, var(--color-neutral-800) 0%, var(--color-neutral-900) 100%)',
+            color: 'var(--text-muted)',
             fontSize: 10,
             display: 'flex',
             alignItems: 'center',
@@ -120,7 +120,7 @@ export function BoardCard({
               style={{
                 fontSize: 10,
                 fontWeight: 700,
-                color: '#0f172a',
+                color: 'var(--on-bright)',
                 background: getEmotionColor(shot.psychology.valence),
                 borderRadius: 999,
                 padding: '2px 7px',
@@ -131,8 +131,8 @@ export function BoardCard({
             <span
               style={{
                 fontSize: 10,
-                color: '#dbeafe',
-                background: '#1d4ed8',
+                color: 'var(--film-accent-300)',
+                background: 'var(--film-accent-600)',
                 borderRadius: 999,
                 padding: '2px 7px',
                 textTransform: 'uppercase',
@@ -159,13 +159,13 @@ export function BoardCard({
                 padding: 8,
                 background: 'var(--bg-primary)',
                 border: '1px solid var(--border)',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-sm)',
                 color: 'var(--text-primary)',
                 fontSize: 12,
               }}
             />
             <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
-              <button onClick={() => onSaveAction(shot.id)} style={primaryBtn('#22c55e')}>
+              <button onClick={() => onSaveAction(shot.id)} style={saveBtn}>
                 Save
               </button>
               <button onClick={onCancelEdit} style={secondaryBtn}>
@@ -193,7 +193,7 @@ export function BoardCard({
             padding: '6px 8px',
             background: 'var(--bg-primary)',
             border: '1px solid var(--border)',
-            borderRadius: 6,
+            borderRadius: 'var(--radius-sm)',
             color: 'var(--text-primary)',
             fontSize: 11,
           }}
@@ -207,12 +207,12 @@ export function BoardCard({
 
         <div style={{ display: 'flex', gap: 6 }}>
           {shot.boardStatus === 'ready' && (
-            <button onClick={() => onGenerateOne(shot.id)} style={primaryBtn('#4ade80')}>
+            <button onClick={() => onGenerateOne(shot.id)} style={generateBtn}>
               Generate
             </button>
           )}
           {shot.boardStatus === 'review' && (
-            <button onClick={() => onApprove(shot.id)} style={primaryBtn('#22c55e')}>
+            <button onClick={() => onApprove(shot.id)} style={saveBtn}>
               Approve
             </button>
           )}
@@ -222,7 +222,7 @@ export function BoardCard({
             </button>
           )}
           {shot.boardStatus === 'generating' && (
-            <span style={{ fontSize: 11, color: '#60a5fa', fontWeight: 600 }}>In Queue</span>
+            <span style={{ fontSize: 11, color: 'var(--scene-heading)', fontWeight: 600 }}>In Queue</span>
           )}
         </div>
       </div>
@@ -231,30 +231,39 @@ export function BoardCard({
 }
 
 function getEmotionColor(valence: number): string {
-  if (valence >= 3) return '#4ade80';
-  if (valence >= 1) return '#86efac';
-  if (valence >= -1) return '#fbbf24';
-  if (valence >= -3) return '#fb923c';
-  return '#f87171';
+  if (valence >= 3) return 'var(--emotion-very-positive)';
+  if (valence >= 1) return 'var(--emotion-positive)';
+  if (valence >= -1) return 'var(--emotion-neutral)';
+  if (valence >= -3) return 'var(--emotion-negative)';
+  return 'var(--emotion-very-negative)';
 }
 
-function primaryBtn(color: string): React.CSSProperties {
-  return {
-    padding: '6px 8px',
-    fontSize: 11,
-    borderRadius: 6,
-    border: `1px solid ${color}`,
-    background: color,
-    color: '#0f172a',
-    fontWeight: 700,
-    cursor: 'pointer',
-  };
-}
+const baseActionBtn: React.CSSProperties = {
+  padding: '6px 8px',
+  fontSize: 11,
+  borderRadius: 'var(--radius-sm)',
+  fontWeight: 700,
+  cursor: 'pointer',
+};
+
+const saveBtn: React.CSSProperties = {
+  ...baseActionBtn,
+  border: '1px solid var(--success)',
+  background: 'var(--success)',
+  color: 'var(--on-bright)',
+};
+
+const generateBtn: React.CSSProperties = {
+  ...baseActionBtn,
+  border: '1px solid var(--emotion-very-positive)',
+  background: 'var(--emotion-very-positive)',
+  color: 'var(--on-bright)',
+};
 
 const secondaryBtn: React.CSSProperties = {
   padding: '6px 8px',
   fontSize: 11,
-  borderRadius: 6,
+  borderRadius: 'var(--radius-sm)',
   border: '1px solid var(--border)',
   background: 'var(--bg-tertiary)',
   color: 'var(--text-primary)',

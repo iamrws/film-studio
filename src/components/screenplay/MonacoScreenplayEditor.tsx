@@ -10,6 +10,28 @@ interface Props {
 
 const SCREENPLAY_LANG_ID = 'screenplay';
 
+/**
+ * Resolves a CSS custom property to its actual hex colour by temporarily
+ * applying it to a DOM element and reading back the computed value.
+ * Returns a #rrggbb string, or '#000000' as a safe fallback.
+ */
+function resolveVar(varName: string): string {
+  const el = document.createElement('span');
+  el.style.display = 'none';
+  el.style.color = `var(${varName})`;
+  document.documentElement.appendChild(el);
+  const rgb = window.getComputedStyle(el).color;
+  document.documentElement.removeChild(el);
+  const m = rgb.match(/\d+/g);
+  if (!m || m.length < 3) return '#000000';
+  return '#' + m.slice(0, 3).map(n => (+n).toString(16).padStart(2, '0')).join('');
+}
+
+/** Strip the leading '#' — Monaco token rules use bare hex strings. */
+function monacoFg(varName: string): string {
+  return resolveVar(varName).slice(1);
+}
+
 function registerScreenplayLanguage(monaco: Monaco) {
   // Only register once
   if (monaco.languages.getLanguages().some((lang: { id: string }) => lang.id === SCREENPLAY_LANG_ID)) return;
@@ -41,26 +63,28 @@ function registerScreenplayLanguage(monaco: Monaco) {
     },
   });
 
-  // Define the dark theme for screenplay
+  // Build theme colours from design-system CSS vars resolved at init time
+  const accentHex = resolveVar('--film-accent-500');
+
   monaco.editor.defineTheme('screenplay-dark', {
     base: 'vs-dark',
     inherit: true,
     rules: [
-      { token: 'scene-heading', foreground: '60a5fa', fontStyle: 'bold' },
-      { token: 'character-cue', foreground: '4ade80', fontStyle: 'bold' },
-      { token: 'parenthetical', foreground: '999999', fontStyle: 'italic' },
-      { token: 'transition', foreground: 'f87171' },
-      { token: 'shot-direction', foreground: 'fbbf24' },
-      { token: 'note-directive', foreground: 'a78bfa', fontStyle: 'italic' },
+      { token: 'scene-heading',  foreground: monacoFg('--scene-heading'),       fontStyle: 'bold' },
+      { token: 'character-cue',  foreground: monacoFg('--character-name'),      fontStyle: 'bold' },
+      { token: 'parenthetical',  foreground: monacoFg('--color-neutral-400'),   fontStyle: 'italic' },
+      { token: 'transition',     foreground: monacoFg('--transition') },
+      { token: 'shot-direction', foreground: monacoFg('--film-warning') },
+      { token: 'note-directive', foreground: monacoFg('--film-secondary-400'),  fontStyle: 'italic' },
     ],
     colors: {
-      'editor.background': '#0f0f0f',
-      'editor.foreground': '#e8e8e8',
-      'editor.lineHighlightBackground': '#1a1a1a',
-      'editor.selectionBackground': '#6366f140',
-      'editorLineNumber.foreground': '#444444',
-      'editorLineNumber.activeForeground': '#888888',
-      'editorIndentGuide.background': '#333333',
+      'editor.background':             resolveVar('--color-neutral-900'),
+      'editor.foreground':             resolveVar('--color-neutral-100'),
+      'editor.lineHighlightBackground': resolveVar('--color-neutral-850'),
+      'editor.selectionBackground':    accentHex + '40',
+      'editorLineNumber.foreground':   resolveVar('--color-neutral-700'),
+      'editorLineNumber.activeForeground': resolveVar('--color-neutral-400'),
+      'editorIndentGuide.background':  resolveVar('--color-neutral-700'),
     },
   });
 }

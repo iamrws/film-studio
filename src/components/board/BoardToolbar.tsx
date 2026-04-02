@@ -107,7 +107,7 @@ export function BoardToolbar({
           style={{
             marginTop: 8,
             fontSize: 12,
-            color: statusTone === 'error' ? '#f87171' : '#4ade80',
+            color: statusTone === 'error' ? 'var(--error)' : 'var(--success)',
           }}
         >
           {statusMessage}
@@ -138,10 +138,10 @@ const secondaryButton: React.CSSProperties = {
 
 const primaryButton: React.CSSProperties = {
   padding: '7px 12px',
-  background: '#4ade80',
-  border: '1px solid #4ade80',
-  borderRadius: 6,
-  color: '#0f172a',
+  background: 'var(--emotion-very-positive)',
+  border: '1px solid var(--emotion-very-positive)',
+  borderRadius: 'var(--radius-sm)',
+  color: 'var(--on-bright)',
   cursor: 'pointer',
   fontSize: 12,
   fontWeight: 700,

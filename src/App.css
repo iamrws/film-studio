@@ -51,6 +51,16 @@
   --transition:     #f87171;
   --action:         var(--color-neutral-200);
 
+  /* Emotion / valence palette (BoardCard) */
+  --emotion-very-positive: #4ade80;
+  --emotion-positive:      #86efac;
+  --emotion-neutral:       #fbbf24;
+  --emotion-negative:      #fb923c;
+  --emotion-very-negative: var(--transition);
+
+  /* Text colour on bright/coloured backgrounds */
+  --on-bright: var(--color-neutral-950);
+
   /* ── Spacing Scale ─────────────────────────────────────── */
   --space-1:  4px;
   --space-2:  8px;
