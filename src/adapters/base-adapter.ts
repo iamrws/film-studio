@@ -58,7 +58,8 @@ export interface VideoAPIAdapter {
   /** Download completed video to local path */
   downloadResult(
     outputUrl: string,
-    outputPath: string
+    outputPath: string,
+    config?: AdapterConfig
   ): Promise<void>;
 
   /** Estimate cost before submission */

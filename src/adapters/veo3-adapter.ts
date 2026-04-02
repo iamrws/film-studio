@@ -176,9 +176,15 @@ export class Veo3Adapter implements VideoAPIAdapter {
 
   async downloadResult(
     outputUrl: string,
-    outputPath: string
+    outputPath: string,
+    config?: AdapterConfig
   ): Promise<void> {
-    const response = await fetch(outputUrl);
+    const headers: HeadersInit = {};
+    if (config?.apiKey) {
+      headers['x-goog-api-key'] = config.apiKey;
+    }
+
+    const response = await fetch(outputUrl, { headers });
     if (!response.ok) {
       throw new Error(`Download failed: ${response.status}`);
     }

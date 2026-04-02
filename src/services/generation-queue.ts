@@ -22,6 +22,7 @@ import { RunwayGen4Adapter } from '../adapters/runway-gen4-adapter';
 const QUEUE_SNAPSHOT_KEY = 'film-studio:generation-queue:v2';
 const QUEUE_SNAPSHOT_VERSION = 2;
 const MAX_DEAD_LETTERS = 200;
+const MAX_POLL_DURATION_MS = 30 * 60 * 1000; // 30 minutes max poll time per job
 
 const adapters: Partial<Record<PlatformId, VideoAPIAdapter>> = {
   veo3: new Veo3Adapter(),
@@ -430,11 +431,23 @@ export class GenerationQueue {
       this.pollTimers.delete(jobId);
     }
 
+    const pollStartedAt = Date.now();
+
     const timer = setInterval(async () => {
       const job = this.jobs.get(jobId);
       if (!job || job.status === 'completed' || job.status === 'failed') {
         clearInterval(timer);
         this.pollTimers.delete(jobId);
+        return;
+      }
+
+      // Fail jobs that have been polling for too long
+      if (Date.now() - pollStartedAt > MAX_POLL_DURATION_MS) {
+        clearInterval(timer);
+        this.pollTimers.delete(jobId);
+        this.activeSubmissions = Math.max(0, this.activeSubmissions - 1);
+        this.moveToDeadLetter(jobId, 'Polling timed out after 30 minutes', job.attemptCount);
+        void this.processQueue();
         return;
       }
 
@@ -450,7 +463,7 @@ export class GenerationQueue {
 
           const outputPath = `generated/${job.platform}/${job.shot.id}_${Date.now()}.mp4`;
           try {
-            await adapter.downloadResult(status.outputUrl, outputPath);
+            await adapter.downloadResult(status.outputUrl, outputPath, config);
             if (job.generation) {
               job.generation.status = 'completed';
               job.generation.completedAt = new Date().toISOString();

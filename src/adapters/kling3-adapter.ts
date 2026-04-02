@@ -117,7 +117,7 @@ export class Kling3Adapter implements VideoAPIAdapter {
     }
   }
 
-  async downloadResult(outputUrl: string, outputPath: string): Promise<void> {
+  async downloadResult(outputUrl: string, outputPath: string, _config?: AdapterConfig): Promise<void> {
     const response = await fetch(outputUrl);
     if (!response.ok) throw new Error(`Download failed: ${response.status}`);
 
