@@ -27,7 +27,7 @@ export function GenerationQueue() {
 
   useEffect(() => {
     setLoading(true);
-    const result = refreshJobs();
+    const result = refreshJobs() as unknown;
     const done = () => setLoading(false);
     if (result instanceof Promise) {
       result.then(done, done);

@@ -57,8 +57,10 @@ export function Storyboard() {
             {globalStyle.aspectRatio && ` | ${globalStyle.aspectRatio}`}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4 }} role="tablist" aria-label="View mode">
           <button
+            role="tab"
+            aria-selected={viewMode === 'timeline'}
             onClick={() => setViewMode('timeline')}
             style={{
               ...viewBtn,
@@ -68,6 +70,8 @@ export function Storyboard() {
             Timeline
           </button>
           <button
+            role="tab"
+            aria-selected={viewMode === 'grid'}
             onClick={() => setViewMode('grid')}
             style={{
               ...viewBtn,
@@ -275,6 +279,8 @@ function ShotCard({
     >
       {/* Status indicator */}
       <div
+        role="status"
+        aria-label={isComplete ? 'Generated' : hasGenerations ? 'In progress' : 'Not submitted'}
         style={{
           position: 'absolute',
           top: 6,

@@ -93,6 +93,7 @@ export function CharacterBible() {
 
       {error && (
         <div
+          role="alert"
           style={{
             padding: '10px 14px',
             background: 'var(--error-subtle-bg)',
@@ -141,7 +142,11 @@ export function CharacterBible() {
                   <div
                     key={name}
                     className="character-card"
+                    role={existing ? 'button' : undefined}
+                    tabIndex={existing ? 0 : undefined}
+                    aria-expanded={existing ? isSelected : undefined}
                     onClick={() => setSelectedChar(isSelected ? null : name)}
+                    onKeyDown={existing ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedChar(isSelected ? null : name); } } : undefined}
                     style={{
                       cursor: existing ? 'pointer' : 'default',
                       border: isSelected

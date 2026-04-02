@@ -310,6 +310,7 @@ export function ShotDesigner() {
             {/* Status messages */}
             {error && (
               <div
+                role="alert"
                 style={{
                   padding: '10px 14px',
                   background: 'var(--error-subtle-bg)',
@@ -326,6 +327,8 @@ export function ShotDesigner() {
 
             {submitStatus && (
               <div
+                role="status"
+                aria-live="polite"
                 style={{
                   padding: '10px 14px',
                   background: 'var(--success-subtle-bg)',

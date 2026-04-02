@@ -496,6 +496,7 @@ export function Dashboard() {
       {/* Error */}
       {error && (
         <div
+          role="alert"
           style={{
             padding: '10px 14px',
             background: 'var(--error-subtle-bg)',

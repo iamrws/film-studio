@@ -144,6 +144,8 @@ export function BRollStudio() {
       {/* Left Panel — Input */}
       <div style={{
         width: 420,
+        maxWidth: '40%',
+        minWidth: 280,
         flexShrink: 0,
         borderRight: '1px solid var(--border)',
         background: 'var(--bg-secondary)',
@@ -218,7 +220,7 @@ export function BRollStudio() {
         {/* Generate Button */}
         <div style={{ padding: '0 20px', marginBottom: 20 }}>
           {error && (
-            <div style={{
+            <div role="alert" style={{
               padding: '8px 12px',
               background: 'var(--error-subtle-bg)',
               border: '1px solid var(--transition)',

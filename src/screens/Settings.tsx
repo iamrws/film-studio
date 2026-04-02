@@ -95,7 +95,7 @@ export function Settings() {
   );
 
   return (
-    <div style={{ padding: 24, maxWidth: 800, overflowY: 'auto', height: '100%' }}>
+    <div style={{ padding: 24, maxWidth: 800, margin: '0 auto', overflowY: 'auto', height: '100%' }}>
       <h2 style={{ marginBottom: 24 }}>Settings</h2>
 
       {/* Project File Operations */}

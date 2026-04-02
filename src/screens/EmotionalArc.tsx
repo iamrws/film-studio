@@ -12,13 +12,13 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useProjectStore } from '../stores/project-store';
 import { analyzeEmotionalArc, type EmotionalArcAnalysis } from '../services/llm-service';
 
-const STORY_SHAPE_LABELS: Record<string, { label: string; description: string; color: string }> = {
-  rags_to_riches: { label: 'Rags to Riches', description: 'Steady emotional rise', color: '#4ade80' },
-  tragedy: { label: 'Tragedy', description: 'Steady emotional fall', color: '#f87171' },
-  man_in_a_hole: { label: 'Man in a Hole', description: 'Fall then rise (most common)', color: '#60a5fa' },
-  icarus: { label: 'Icarus', description: 'Rise then fall', color: '#fbbf24' },
-  cinderella: { label: 'Cinderella', description: 'Rise, fall, rise (most commercially successful)', color: '#a78bfa' },
-  oedipus: { label: 'Oedipus', description: 'Fall, rise, fall (darkest arc)', color: '#fb923c' },
+const STORY_SHAPE_LABELS: Record<string, { label: string; description: string; cssVar: string; fallback: string }> = {
+  rags_to_riches: { label: 'Rags to Riches', description: 'Steady emotional rise', cssVar: '--shape-rags-to-riches', fallback: '#4ade80' },
+  tragedy: { label: 'Tragedy', description: 'Steady emotional fall', cssVar: '--shape-tragedy', fallback: '#f87171' },
+  man_in_a_hole: { label: 'Man in a Hole', description: 'Fall then rise (most common)', cssVar: '--shape-man-in-a-hole', fallback: '#60a5fa' },
+  icarus: { label: 'Icarus', description: 'Rise then fall', cssVar: '--shape-icarus', fallback: '#fbbf24' },
+  cinderella: { label: 'Cinderella', description: 'Rise, fall, rise (most commercially successful)', cssVar: '--shape-cinderella', fallback: '#a78bfa' },
+  oedipus: { label: 'Oedipus', description: 'Fall, rise, fall (darkest arc)', cssVar: '--shape-oedipus', fallback: '#fb923c' },
 };
 
 export function EmotionalArc() {
@@ -226,6 +226,7 @@ export function EmotionalArc() {
 
       {error && (
         <div
+          role="alert"
           style={{
             padding: '10px 14px',
             background: 'var(--error-subtle-bg)',
@@ -258,13 +259,13 @@ export function EmotionalArc() {
                 key={key}
                 style={{
                   padding: '6px 12px',
-                  background: `${info.color}15`,
-                  border: `1px solid ${info.color}40`,
+                  background: `color-mix(in srgb, var(${info.cssVar}, ${info.fallback}) 15%, transparent)`,
+                  border: `1px solid color-mix(in srgb, var(${info.cssVar}, ${info.fallback}) 40%, transparent)`,
                   borderRadius: 6,
                   fontSize: 11,
                 }}
               >
-                <span style={{ color: info.color, fontWeight: 600 }}>{info.label}</span>
+                <span style={{ color: `var(${info.cssVar}, ${info.fallback})`, fontWeight: 600 }}>{info.label}</span>
                 <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>{info.description}</span>
               </div>
             ))}
@@ -280,14 +281,14 @@ export function EmotionalArc() {
                 gap: 16,
                 marginBottom: 20,
                 padding: 16,
-                background: `${shapeInfo.color}10`,
-                border: `1px solid ${shapeInfo.color}40`,
+                background: `color-mix(in srgb, var(${shapeInfo.cssVar}, ${shapeInfo.fallback}) 10%, transparent)`,
+                border: `1px solid color-mix(in srgb, var(${shapeInfo.cssVar}, ${shapeInfo.fallback}) 40%, transparent)`,
                 borderRadius: 8,
                 alignItems: 'center',
               }}
             >
               <div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: shapeInfo.color }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: `var(${shapeInfo.cssVar}, ${shapeInfo.fallback})` }}>
                   {shapeInfo.label}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
@@ -296,7 +297,7 @@ export function EmotionalArc() {
               </div>
               <div style={{ flex: 1 }} />
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: shapeInfo.color }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: `var(${shapeInfo.cssVar}, ${shapeInfo.fallback})` }}>
                   {Math.round(analysis.confidence * 100)}%
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>confidence</div>
@@ -325,6 +326,8 @@ export function EmotionalArc() {
           >
             <canvas
               ref={canvasRef}
+              role="img"
+              aria-label={`Emotional arc graph showing valence and arousal across ${analysis?.sceneAnalysis.length ?? 0} scenes. Story shape: ${shapeInfo?.label ?? 'unknown'}.`}
               style={{ width: '100%', height: '100%' }}
             />
           </div>
@@ -353,6 +356,7 @@ export function EmotionalArc() {
                       <td style={tdS}>Scene {sa.sceneIndex + 1}</td>
                       <td style={tdS}>
                         <span
+                          aria-hidden="true"
                           style={{
                             display: 'inline-block',
                             width: 8,
