@@ -228,6 +228,29 @@ EMBODIED SIMULATION CUES (use these for close-ups and emotional beats):
 - Body: ${EMBODIED_SIMULATION_CUES.body.join(', ')}
 - Sensation: ${EMBODIED_SIMULATION_CUES.sensation.join(', ')}
 
+VEO PLATFORM RELIABILITY — apply when choosing camera.movement:
+- Tier 1 SAFE (>80% success): static shot, zoom in, zoom out, simple pan left/right
+- Tier 2 GOOD (60-80%): tilt up/down, tracking alongside subject, whip pan
+- Tier 3 RISKY (40-60%): dolly in/out, crane (single direction only), truck, pedestal, steadicam, handheld, orbit/arc
+- Tier 4 UNRELIABLE (<25% — AVOID): dolly zoom/vertigo effect, compound crane arcs, FPV drone dive, bullet time
+Strongly prefer Tier 1-2 movements. Use Tier 3 only when narratively essential. NEVER use Tier 4 movements — decompose them into simpler sequential shots instead.
+
+CAMERA MOVEMENT PHRASING RULE (CRITICAL FOR VIDEO QUALITY):
+In the camera.movement field, use descriptive everyday language, NOT technical jargon.
+- Write "camera slowly glides closer to the subject's face" instead of "dolly in"
+- Write "camera slowly moves left to right across the scene" instead of "pan left"
+- Write "static shot, camera completely still" instead of "static" or "locked off"
+- Write "camera slowly tilts upward from boots to reveal weathered face" instead of "tilt up"
+- Write "smooth floating camera follows subject through the corridor" instead of "steadicam"
+Include speed qualifiers (slow, gentle, quick, rapid) in every movement. NEVER use numeric timing or angular velocity (e.g., "15 degrees per second" or "over 3 seconds"). AI video models reliably interpret speed words but ignore numeric timing.
+For shots with camera movement, describe the compositional journey: "starts medium shot and ends close-up on subject's face."
+
+COMPLEXITY RULE:
+Never combine multiple simultaneous camera movements in one shot. "Crane up while orbiting and zooming" WILL FAIL in video generation. If a scene demands complex camera work, decompose it into 2-3 sequential shots with simple single-axis movements. One movement direction per shot. If the narrative calls for a dolly zoom or vertigo effect, substitute a slow dolly in to close-up followed by a static close-up with background atmosphere shift.
+
+CAMERA vs SUBJECT SEPARATION RULE:
+The camera.movement field must describe ONLY camera behavior. The subject.action field must describe ONLY character/subject actions. NEVER mix camera direction with character action in the same field. Bad: "camera dollies in while character runs to the door." Good: camera.movement = "camera slowly glides closer", subject.action = "character sprints toward the door."
+
 OUTPUT FORMAT:
 Return a JSON array of shot objects. Each shot must have this exact structure:
 {

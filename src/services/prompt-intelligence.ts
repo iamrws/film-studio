@@ -1,5 +1,11 @@
 import type { GlobalStyle } from '../types/project';
 import type { Shot } from '../types/scene';
+import {
+  getMovementSuccessRate,
+  getMovementTier,
+  getMovementAlternative,
+  detectCompoundMovement,
+} from '../config/veo-prompt-phrases';
 
 export interface PromptIssue {
   code: string;
@@ -849,7 +855,9 @@ function buildPlatformPrompt(
       return sections.filter(Boolean).join('\n\n');
     }
     case 'veo3':
-      return joinSentences([basePrompt, camera, subject, setting, lighting, style, audio]);
+      // Camera MUST be front-loaded for Veo — it weights early tokens heavily
+      // Five-part formula: [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]
+      return joinSentences([camera, subject, basePrompt, setting, lighting, style, audio]);
     case 'kling3': {
       const dialogueBlock = shot.prompt.audio.dialogue
         .map((line) => `[Speaker: ${line.characterName}] "${line.text}"`)
@@ -912,6 +920,55 @@ export function optimizePromptForPlatform(params: {
   return buildPlatformPrompt(platformKey, params.prompt, params.shot, params.globalStyle);
 }
 
+// ─── Veo Movement Reliability Checks ──────────────────────
+
+function detectVeoMovementRisks(shot: Shot, platformKey: PlatformKey): PromptIssue[] {
+  if (platformKey !== 'veo3') return [];
+  const issues: PromptIssue[] = [];
+  const movement = shot.prompt.camera.movement;
+  if (!movement) return issues;
+
+  // Check for compound movements in the movement text
+  if (detectCompoundMovement(movement)) {
+    issues.push({
+      code: 'compound_movement',
+      severity: 'error',
+      message: `Compound camera movement detected: "${movement}". Veo compound movements have <12% success rate. Decompose into sequential single-axis shots.`,
+    });
+  }
+
+  // Check normalized movement against success rate data
+  const normalized = movement.toUpperCase().trim();
+  const tier = getMovementTier(normalized);
+  const rate = getMovementSuccessRate(normalized);
+
+  if (tier === 'unreliable') {
+    const alt = getMovementAlternative(normalized);
+    issues.push({
+      code: 'unreliable_movement',
+      severity: 'error',
+      message: `"${normalized}" has only ${rate}% success rate on Veo.${alt ? ` Suggested alternative: ${alt}` : ' Consider decomposing into simpler movements.'}`,
+    });
+  } else if (tier === 'risky' && rate < 50) {
+    issues.push({
+      code: 'risky_movement',
+      severity: 'warning',
+      message: `"${normalized}" has ${rate}% success rate on Veo. Consider a higher-reliability movement (static 94%, zoom 81%, pan 73%).`,
+    });
+  }
+
+  // Check for numeric timing in movement text (Veo ignores these)
+  if (/\d+\s*seconds?/i.test(movement) || /\d+\s*degrees?\s*per/i.test(movement)) {
+    issues.push({
+      code: 'numeric_timing',
+      severity: 'warning',
+      message: 'Numeric timing/angular velocity in camera movement. Veo ignores these — use speed words like "slow", "gentle", "quick" instead.',
+    });
+  }
+
+  return issues;
+}
+
 export function analyzePromptForPlatform(shot: Shot, platform: string, prompt: string): PromptQualityReport {
   const normalizedPrompt = normalizeLookup(prompt);
   const platformKey = normalizePlatform(platform);
@@ -921,6 +978,7 @@ export function analyzePromptForPlatform(shot: Shot, platform: string, prompt: s
     ...detectSingleShotViolations(prompt, normalizedPrompt),
     ...detectVagueLighting(normalizedPrompt),
     ...detectContradictions(normalizedPrompt, platformKey),
+    ...detectVeoMovementRisks(shot, platformKey),
   ]);
 
   const breakdown: PromptQualityBreakdown = {

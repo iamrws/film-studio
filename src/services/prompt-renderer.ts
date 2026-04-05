@@ -26,6 +26,11 @@ import {
   normalizeLightingStyle,
   normalizeLens,
 } from '../config/cinematography-vocabulary';
+import {
+  getVeoMovementPhrase,
+  getVeoShotTypePhrase,
+  getVeoAnglePhrase,
+} from '../config/veo-prompt-phrases';
 import { optimizePromptForPlatform } from './prompt-intelligence';
 
 // ─── Helper: resolve character anchors ───────────────────
@@ -134,7 +139,11 @@ export function renderVeo3Prompt(
   const parts: string[] = [];
 
   // Camera move + lens (front-loaded — Veo weights early words heavily)
-  const cameraStr = [p.camera.shotType, p.camera.movement, p.camera.angle]
+  // Use Veo-optimized descriptive phrases instead of raw canonical tokens
+  const shotTypePhrase = p.camera.shotType ? getVeoShotTypePhrase(p.camera.shotType) : '';
+  const movementPhrase = p.camera.movement ? getVeoMovementPhrase(p.camera.movement) : '';
+  const anglePhrase = p.camera.angle ? getVeoAnglePhrase(p.camera.angle) : '';
+  const cameraStr = [shotTypePhrase, movementPhrase, anglePhrase]
     .filter(Boolean).join(', ');
   const lensStr = p.camera.lens ? `, ${p.camera.lens}` : '';
   parts.push(`${cameraStr}${lensStr}`);
@@ -189,6 +198,11 @@ export function renderVeo3Prompt(
   }
   if (audioParts.length > 0) {
     parts.push(`Audio: ${audioParts.join('. ')}`);
+  }
+
+  // Emotion/tone from psychology engine (improves Veo's emotional rendering)
+  if (shot.psychology.targetEmotion) {
+    parts.push(`Tone: ${shot.psychology.targetEmotion}`);
   }
 
   // Transportation cues from psychology engine
